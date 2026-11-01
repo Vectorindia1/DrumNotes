@@ -6,7 +6,7 @@ Status values per PRD §20. No model has been installed or executed.
 |---|---|---|---|---|
 | ADTOF (original, Keras/TF + madmom) | github.com/MZehren/ADTOF | **CC BY-NC-SA 4.0 — NON-COMMERCIAL — NOT APPROVED FOR PRODUCTION** | NOT STARTED | Tested on Python 3.10 only; TF/madmom heavy. Prefer PyTorch port. |
 | ADTOF-pytorch | github.com/xavriley/ADTOF-pytorch | **No LICENSE file in repo; derived from ADTOF weights (NC-SA)** — NON-COMMERCIAL — NOT APPROVED FOR PRODUCTION | EXPERIMENTAL (installed editable at third_party/ADTOF-pytorch, commit 85c192e; synthetic smoke test only) | Deps: torch, librosa, pretty_midi. Claims -0.2% F vs original on MDBDrums++. Weights are converted ADTOF weights. |
-| Demucs | github.com/adefossez/demucs | Code MIT; weight/dataset licenses to verify | NOT STARTED | Optional (PRD §5.2/§11); not needed for M1. |
+| Demucs htdemucs | github.com/adefossez/demucs (PyPI demucs 4.1.0) | Code MIT. **Weights' own licence / training-data terms not stated by the repo: UNVERIFIED for commercial use** | EXPERIMENTAL (executed, see below) | Optional (PRD §5.2/§11). Not required by the pipeline (`--separate` opt-in). |
 | librosa / NumPy / SciPy / PyTorch | PyPI | ISC / BSD / BSD / BSD | NOT STARTED (numpy, scipy installed) | |
 | MuseScore | apt `musescore3` 3.2.3 | GPL-3.0 (CLI invoked as external process) | BLOCKED (needs sudo) | |
 
@@ -23,6 +23,20 @@ Production approval (PRD §5.3): none granted.
 - Repo commit `85c192e78f716ea0b111cc8a5ee4a8f6a3a4f8a9` (2025-11-11). Weights `adtof_frame_rnn_pytorch_weights.pth` sha256 `1bc986e596ec47ba0b44916f87cd4a39f0b2bec23596df3fb5d0e87749217320` (checkpoint nests tensors under `model_weights`).
 - Strict load: 0 missing / 0 unexpected keys. The package itself loads with `strict=False` (silent mismatch risk), so our wrapper must keep the strict check.
 - CPU inference on a 20 s clip: works (cuda unavailable).
-- **SYNTHETIC ONLY** (`scripts/adtof_smoke.py`, programmatic kick/snare/hat, 8 bars @100 BPM, tol ±50 ms): kick P/R/F1 1.00/1.00/1.00 (24 ref), snare 1.00/1.00/1.00 (16), hi-hat 1.00/0.984/0.992 (64). Toms/cymbals not exercised. This is NOT real-mix accuracy (PRD 7.3 category A).
-- **Defect found (sample-0):** upstream PeakPicker edge-pads the moving average, so an onset at frame 0 is cancelled although the model fires (kick act 0.51 at frame 0). Workaround: pad 10 zero frames before picking and shift times back; recovers the kick at t=0. A hi-hat simultaneous with the t=0 kick (act 0.235 vs threshold 0.22) is still missed. Needs a regression test in the M1 wrapper.
+- **SYNTHETIC ONLY** (`scripts/run_benchmarks.py` category A; earlier ad-hoc script removed; programmatic kick/snare/hat): kick P/R/F1 1.00/1.00/1.00 (24 ref), snare 1.00/1.00/1.00 (16), hi-hat 1.00/0.984/0.992 (64). Toms/cymbals not exercised. This is NOT real-mix accuracy (PRD 7.3 category A).
+- **Defect found (sample-0):** upstream PeakPicker edge-pads the moving average, so an onset at frame 0 is cancelled although the model fires (kick act 0.51 at frame 0). Workaround now in `backend/detection/adtof.py` (pad 10 zero frames, shift back), covered by `test_detection.py`. A weak hi-hat (act 0.235 vs thr 0.22) simultaneous with a t=0 kick can still be missed; strong activations at frame 0 are kept (kick+snare+hat chord at sample 0 detected in the stacked synthetic test).
+- Stacked synthetic pattern (kick+snare+hat only): snare recall 5/8 (activation 0.12–0.15 below threshold 0.24); kick and hat 8/8.
+- Detection times sit ~10 ms (one frame) before synthetic truth; resolution is 10 ms (100 fps).
 - Limitations: 5 classes only, no ghost notes/accents/open-hat; unverified on full mixes; non-commercial weights.
+
+## Demucs htdemucs execution record (2026-11-01)
+- Install: `uv pip install demucs` (4.1.0; torch 2.15.0+cpu / torchaudio 2.11.1 left unchanged; deps einops, julius, lameenc, sphn, safetensors, huggingface-hub, pyyaml, tqdm).
+- Weights: Hugging Face repo `adefossez/HTDemucs`, `955717e8.safetensors`, 84,025,440 bytes, sha256 `d9fa14133cfcc034a6758923bb3a8ca9f8dfd0b582134643bbf83f72c17576dd`, cached in ~/.cache/huggingface/hub (not in git). Loaded as a 1-model bag; sources drums/bass/other/vocals, 44.1 kHz.
+- Hardware: CPU only, 8 cores, ~2 GiB free RAM at the time. Settings: segment 5 s (model trained on 7.8 s), overlap 0.25, shifts 0. Peak RSS ~1.9 GB. Speed: 397.5 s of audio took ~13-15 min (≈2.2 s of compute per second of audio, slower while other work ran).
+
+## Playback sound sources (2026-11-01)
+| Item | Source | Licence | Status |
+|---|---|---|---|
+| MuseScore_General_Lite.sf3 (drum kits, bank 128) | Debian `musescore-general-soundfont-small` -> /usr/share/sounds/sf3 | MIT (per package copyright file) | used for score audio, EXPERIMENTAL |
+| TimGM6mb.sf2 | Debian `timgm6mb-soundfont` | GPL-2 | fallback only |
+| pyfluidsynth 1.4.0 (+ system libfluidsynth.so.3) | PyPI | LGPL-2.1 | used, dev dependency |

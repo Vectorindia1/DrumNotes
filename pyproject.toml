@@ -2,7 +2,10 @@
 name = "drumscribe"
 version = "0.0.1"
 requires-python = ">=3.12,<3.13"
-dependencies = ["torch", "torchaudio", "librosa", "soundfile", "numpy", "scipy", "fastapi", "uvicorn"]
+dependencies = ["torch", "torchaudio", "librosa", "soundfile", "numpy", "scipy", "fastapi", "uvicorn", "pretty_midi", "pyfluidsynth", "demucs"]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "httpx"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

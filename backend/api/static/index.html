@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DrumScribe — drum notation from any song</title>
+  <meta name="description" content="Upload a recording and get drum sheet music as a PDF, plus a player that follows along with a blue line.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%231e66ff'/%3E%3Cpath d='M6 11h20M6 16h20M6 21h20' stroke='white' stroke-width='1.6' opacity='.55'/%3E%3Cpath d='M12 9l8 14M20 9l-8 14' stroke='white' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="#/" aria-label="DrumScribe home">
+      <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--accent)"/><path d="M6 11h20M6 16h20M6 21h20" stroke="#fff" stroke-width="1.6" opacity=".55"/><path d="M12 9l8 14M20 9l-8 14" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg>
+      <span>DrumScribe</span>
+    </a>
+    <span class="tag">experimental</span>
+  </header>
+
+  <main>
+    <p id="live" class="sr-only" role="status" aria-live="polite"></p>
+
+    <!-- 1. HOME ------------------------------------------------------------------>
+    <section id="view-home">
+      <h1>Drum notation from <em>any song</em></h1>
+      <p class="lede">Upload a recording. Get the drum sheet music as a PDF, and a player with a blue line that follows along while it plays.</p>
+
+      <label id="drop" class="drop" tabindex="0">
+        <input id="file" type="file" accept="audio/*,.mp3,.wav,.flac,.m4a,.aac,.ogg,.opus,.mpga" hidden>
+        <div class="drop-idle">
+          <svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true"><path d="M8 24v0M14 18v12M20 10v28M26 16v16M32 6v36M38 18v12M44 24v0" stroke="currentColor" stroke-width="3" stroke-linecap="round" fill="none"/></svg>
+          <strong>Drop an audio file here</strong>
+          <span>or <u>choose a file</u> &middot; mp3, wav, flac, m4a, ogg, opus</span>
+          <small id="limits"></small>
+        </div>
+        <div class="drop-busy" hidden>
+          <strong id="drop-msg">Uploading…</strong>
+          <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Upload progress"><i id="up-bar"></i></div>
+          <button type="button" id="up-cancel" class="link">Cancel</button>
+        </div>
+      </label>
+      <p id="home-error" class="msg error" role="alert" hidden></p>
+      <p class="fine">Links from YouTube or Spotify can't be used: their audio isn't available to third parties. Upload a file you own instead.</p>
+
+      <div id="recent" hidden>
+        <h2>Your scores</h2>
+        <ul id="recent-list" class="recent"></ul>
+        <p class="fine">Saved in this browser only.</p>
+      </div>
+    </section>
+
+    <!-- 2. SETUP ----------------------------------------------------------------->
+    <section id="view-setup" hidden>
+      <h2 class="view-title">Ready to create the score</h2>
+      <div class="card file">
+        <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M9 18V6l10-2v12M9 18a3 3 0 11-6 0 3 3 0 016 0zm10-2a3 3 0 11-6 0 3 3 0 016 0z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><strong id="f-title"></strong><span id="f-meta" class="muted"></span></div>
+        <button type="button" id="f-change" class="link">Choose another</button>
+      </div>
+
+      <div class="card opts">
+        <label class="check">
+          <input type="checkbox" id="separate">
+          <span><strong>Separate the drums first</strong>
+            <small id="sep-note">Slower. Can help on dense mixes, but not always.</small></span>
+        </label>
+        <details>
+          <summary>More options</summary>
+          <div class="grid">
+            <label>Tempo (BPM)
+              <input id="tempo" type="number" min="30" max="300" step="0.1" placeholder="Detect automatically" inputmode="decimal">
+              <small>If you know it, entering it gives cleaner bar lines.</small>
+            </label>
+            <label>Drum sound for playback
+              <select id="kit">
+                <option value="standard">Standard</option><option value="room">Room</option><option value="power">Power</option>
+                <option value="jazz">Jazz</option><option value="brush">Brush</option><option value="electronic">Electronic</option><option value="808">TR-808</option>
+              </select>
+              <small>A sampled kit that plays what the score says.</small>
+            </label>
+          </div>
+        </details>
+        <label class="check rights">
+          <input type="checkbox" id="rights">
+          <span>I own this recording or have permission to use it.</span>
+        </label>
+      </div>
+
+      <p id="setup-error" class="msg error" role="alert" hidden></p>
+      <div class="actions">
+        <button type="button" id="create" class="btn primary" disabled>Create score</button>
+        <span id="eta" class="muted"></span>
+      </div>
+    </section>
+
+    <!-- 3. PROGRESS -------------------------------------------------------------->
+    <section id="view-progress" hidden>
+      <h2 class="view-title" id="p-title">Creating your score</h2>
+      <p id="p-sub" class="lede small"></p>
+      <div class="bar big" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Progress"><i id="p-bar"></i></div>
+      <ol id="steps" class="steps"></ol>
+      <p id="p-error" class="msg error" role="alert" hidden></p>
+      <div class="actions">
+        <button type="button" id="p-retry" class="btn primary" hidden>Try again</button>
+        <button type="button" id="p-cancel" class="btn">Cancel</button>
+      </div>
+      <p class="fine" id="p-hint">You can close this page. Bookmark this address to come back to your score.</p>
+    </section>
+
+    <!-- 4. RESULT ---------------------------------------------------------------->
+    <section id="view-result" hidden>
+      <h2 class="view-title" id="r-title"></h2>
+      <ul id="chips" class="chips"></ul>
+      <div class="actions wrap">
+        <a id="dl-pdf" class="btn primary" href="#">Download PDF</a>
+        <a id="dl-xml" class="btn" href="#">MusicXML</a>
+        <a id="dl-mid" class="btn" href="#">MIDI</a>
+        <a id="dl-json" class="btn" href="#">Data (JSON)</a>
+        <a id="open-player" class="btn ghost" href="#" target="_blank" rel="noopener">Open player in a new tab</a>
+      </div>
+      <iframe id="player" title="Score player" loading="lazy" allow="autoplay"></iframe>
+      <div id="notes" class="card notes"><strong>Good to know</strong><ul id="notes-list"></ul></div>
+      <div class="actions wrap">
+        <button type="button" id="r-again" class="btn">Try different settings</button>
+        <button type="button" id="r-delete" class="btn danger">Delete my files</button>
+        <span id="r-keep" class="muted"></span>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>DrumScribe is a research prototype: transcriptions are drafts to check by ear. Its drum-detection model is licensed for non-commercial use only.
+    Your audio is private to your link and is deleted automatically.</p>
+  </footer>
+  <script src="/static/app.js"></script>
+</body>
+</html>
