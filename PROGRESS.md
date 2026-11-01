@@ -112,3 +112,23 @@ ADT_STR rejected after evaluation (masking bug; mislabels hi-hats on real mixes 
 
 ## M0 completion report (PRD 18.2)
 - Verified: environment audit, CPU venv, decode, MuseScore render, setup.sh (rerun). Unverified: setup.ps1, Docker, fresh-venv setup. Blocked: real-mix acceptance, production model approval.
+
+## Time signatures + tambourine (2026-11-02)
+User: on one song the hi-hat 8ths/16ths were still wrong; learn splash/china/tambourine from any online resource.
+**8ths/16ths cause (measured): the song ("Yeh Fitoor Mera") is in 6/8.** Its hits lock to quarter = 82 sixteenths
+(coherence 0.94) and repeat every 12 slots with the snare on the 4th eighth; the pipeline assumed 4/4 and scored it at
+109.5 BPM (82 x 4/3, lock 0.11), so every hat sat on a wrong slot. New: triplet relock, 12- vs 16-slot recurrence,
+6/8 / 12/8 (shuffle) / 3/4 by snare placement, exact grid from the found downbeat; MusicXML x/8 bars (dotted-quarter
+marking, beat groups), player, validator; website "Time signature" option + chip; CLI `--meter`. Result on the song:
+6/8, hats on eighths (16ths rare). MDB: no F1 change; Rockabilly + CoolJazz (triplet-locked in the hand annotations)
+-> 12/8, 21 songs stay 4/4, SwingJazz (also swung) stays 4/4 (miss). User's 115 and 110 BPM songs stay 4/4.
+**Splash/china/tambourine:** real labelled data is tiny (MDB: 10 / 15 / 32, tambourine all in one song). Fetched real
+one-shots (CrocellKit via HTTP range reads of 151 hits out of a 5.5 GB zip, VSCO-2-CE, 3 soundfonts), mixed them into
+the real MDB songs, retrained. Tambourine-vs-hat: 0 -> 7 of 21 real hits found (precision 0.54) -> IN USE. Splash/china:
+still not found on real songs (works on synthetic only) -> NOT used. See MODEL_REGISTRY. Full benchmark (labels now
+in-sample): hi-hat F1 0.850 -> 0.856, open hat 0.817 -> 0.829, tambourine 0 -> 0.64 (honest out-of-song figure 0.41).
+**Bug found and fixed:** the website's ghost/open/crash/ride counts were the heuristic counts from BEFORE the learned
+relabelling (so "all 92 cymbals crash" on the 115 song was wrong: the model says 47 ride / 45 crash). Also fixed:
+training features were contaminated by the installed model; cymbal relabelling changed hi-hat features.
+On the user's songs (UNVERIFIED by ear): 115-BPM song 100 of 802 hats -> tambourine, mostly in-between 16ths;
+Fitoor 31 tambourine, mostly on the 4th eighth with the snare. 93 tests pass; browser e2e with Fitoor passes.

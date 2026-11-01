@@ -4,7 +4,7 @@ import { spawn } from "node:child_process";
 import { writeFileSync, mkdirSync } from "node:fs";
 
 const [base, audio, shots, ...flags] = process.argv.slice(2);
-const TEMPO = process.env.TEMPO || "100";
+const TEMPO = process.env.TEMPO ?? "100"; // TEMPO="" = let the site detect it
 mkdirSync(shots, { recursive: true });
 const port = 9300 + Math.floor(Math.random() * 500);
 const chrome = spawn("chromium", ["--headless=new", "--disable-gpu", "--no-sandbox", `--remote-debugging-port=${port}`,

@@ -56,6 +56,8 @@ def ours_fine(e):
         return e.articulation if e.articulation in ("ride", "crash", "china", "splash") else "crash"
     if e.instrument == "snare":
         return "ghost" if e.articulation == "ghost" else "snare"
+    if e.instrument == "percussion":
+        return "tambourine"
     return e.instrument
 
 

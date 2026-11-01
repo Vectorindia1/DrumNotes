@@ -55,3 +55,16 @@ Production approval (PRD §5.3): none granted.
 ## Learned labels (2026-11-01) - IN USE
 - `backend/detection/labels.py`, model `models/weights/labels.joblib` (git-ignored, ~1 MB), trained by `scripts/train_labels.py` on MDB Drums full mixes (CC BY-NC-SA -> model non-commercial). sklearn HistGradientBoosting on 21 features per hit (band energies, spectral shape, decay to the next hit, ADTOF activations, spacing in beats).
 - Leave-one-song-out (23 songs): ride vs crash accuracy 0.551 -> 0.903 (ride F1 0.654 -> 0.942, ~81 % of crashes found); open hi-hat F1 0.556 -> 0.680 (false opens 161 -> 69; threshold 0.6 chosen on held-out predictions, slightly optimistic). Splash/china/tambourine: too few examples to learn.
+
+## Hi-hat / tambourine model (2026-11-02) - IN USE
+- `hihat_multi` in `models/weights/labels.joblib`, trained by `scripts/train_cymbal_types.py` (run `scripts/fetch_samples.py` first):
+  classes hi-hat closed / open / tambourine (incl. sleigh bells, jingles) for hits the detector calls hi-hat. Training =
+  MDB Drums real hits + one-shots (CrocellKit CC BY 4.0, VSCO-2-CE CC0, GeneralUser GS, MuseScore General, TimGM6mb)
+  mixed into the real MDB songs at hit-free moments (6 mixes per song). Same 21 features as the ride/crash model.
+- Leave-one-song-out on REAL hits only: tambourine recall 0.33, precision 0.54 (7 of 21; 0 of 21 without the samples;
+  all real tambourine is in ONE song, MusicDelta_Beatles); open-hat F1 0.677 (old model 0.68). Tambourine threshold
+  0.2 chosen on those same predictions (mildly optimistic).
+- NOT used: the matching cymbal model (ride/crash/splash/china): splash 0 of 7, china 3 of 14 at precision 0.11, crash F1
+  0.62 vs 0.66. On synthetic hits it separates splash/china well (so the features can), but it does not transfer to real
+  songs from 4 kits' worth of cymbals. Needs real labelled splash/china recordings (e.g. ENST-Drums, licence to accept).
+- Non-commercial (trained on MDB Drums).

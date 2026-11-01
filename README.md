@@ -51,14 +51,20 @@ different model (see `LICENSE_AUDIT.md`). Demucs weights' licence is unverified.
 With no tempo entered, the tempo is worked out from the drum pattern (all instruments, bar-level repetition), not from
 the loudest pulse in the mix. The result page lists the usual mix-ups (x 3/4, 4/3, 1/2, 2) as buttons: click one to
 re-create the score. Hi-hat: "As played" (default) or "Simplify to eighths". If you type a tempo that is slightly off from what the drums lock to (within 3 %), the tempo
-the audio supports is used and the page tells you. Assumes 4/4 and a steady tempo.
+the audio supports is used and the page tells you. Assumes a steady tempo.
+
+Time signature: detected from the drum pattern (4/4, 3/4, 6/8, or 12/8 for shuffles and swing). A 12-step bar is used only
+when kick and snare clearly repeat every 12 steps rather than every 16, and where the snare falls decides between 6/8, 12/8 and 3/4.
+Choose it under More options (CLI `--meter`) if the bars look wrong. On MDB Drums, 21 songs stay 4/4; the two whose hand
+annotations sit on triplets (Rockabilly, CoolJazz) become 12/8; SwingJazz, also swung, stays 4/4 (missed).
 
 ## Accuracy (measured on 23 real, hand-annotated songs: MDB Drums)
 
 F1 at +-50 ms: kick 0.85, snare 0.71 (ghost notes are mostly missed), hi-hat 0.85, cymbal 0.84, toms 0.34.
 Labels: ride vs crash correct about 90 % of the time and open vs closed hi-hat about 94 %, measured on songs the
-label model had not seen (`scripts/train_labels.py`, leave-one-song-out). Splash, china, tambourine and flams are not
-reliably detected yet. Re-run: `.venv/bin/python scripts/fetch_mdb.py && PYTHONPATH=. .venv/bin/python scripts/eval_mdb.py`.
+label model had not seen (`scripts/train_labels.py`, leave-one-song-out). Tambourine / jingles played like a hi-hat:
+about a third found, about half of the marks right (few real examples; `scripts/fetch_samples.py` then
+`scripts/train_cymbal_types.py`). Splash, china and flams are not detected yet. Re-run: `.venv/bin/python scripts/fetch_mdb.py && PYTHONPATH=. .venv/bin/python scripts/eval_mdb.py`.
 The label model is trained on non-commercial data (CC BY-NC-SA), like the drum detector itself.
 
 ## If something goes wrong

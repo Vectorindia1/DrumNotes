@@ -7,7 +7,7 @@
     "Telling ghost notes, open hi-hats and cymbals apart", "Working out tempo and bar lines",
     "Writing the notation", "Engraving the PDF", "Building the playback player",
   ];
-  const ART_NAMES = { ghost_notes: "ghost notes", open_hihats: "open hi-hats", ride: "ride", crash: "crash", splash: "splash", china: "china", flams: "flams" };
+  const ART_NAMES = { ghost_notes: "ghost notes", open_hihats: "open hi-hats", ride: "ride", crash: "crash", splash: "splash", china: "china", flams: "flams", tambourine: "tambourine / jingles" };
   let job = null, pollTimer = null, upXhr = null, routeToken = 0, limits = { max_minutes: 12, max_upload_mb: 200 };
 
   // ---------- helpers (all dynamic text goes through textContent, never innerHTML) ----------

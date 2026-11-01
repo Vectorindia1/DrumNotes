@@ -110,6 +110,8 @@ def run(audio_path, out_dir="outputs", tempo_hint=None, beats_per_bar=4, offset=
     except Exception as exc:  # noqa: BLE001 - optional, never fatal
         traceback.print_exc(file=sys.stderr)
         learned = {"error": f"{type(exc).__name__}: {exc}"[:200]}
+    if learned and "error" not in learned and "error" not in art_summary:  # counts must describe the labels printed
+        art_summary = articulation.summary(events, art_summary.get("ghost_candidates_added_from_low_threshold", 0))
     del y
     calibrate_phase(events, grid)
     fit_bar_phase(events, grid, beat1)

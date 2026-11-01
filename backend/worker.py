@@ -14,7 +14,8 @@ from backend.pipeline import run
 from backend.rhythm.grid import TempoUndetermined
 
 ART_LABELS = {"snare:ghost": "ghost_notes", "hihat:open": "open_hihats", "cymbal:ride": "ride", "cymbal:crash": "crash",
-              "cymbal:splash": "splash", "cymbal:china": "china", "snare:flam": "flams"}
+              "cymbal:splash": "splash", "cymbal:china": "china", "snare:flam": "flams",
+              "percussion:tambourine": "tambourine"}
 
 
 def emit(kind, **payload):
@@ -40,8 +41,9 @@ def summarise(report, params, title, duration):
         notes.append("Ghost notes, open hi-hats and cymbal types could not be analysed for this file, so the score shows plain notes.")
     else:
         notes.append("Ride vs crash and open vs closed hi-hat come from a model trained on real recordings (right about 90 % and 94 % "
-                     "of the time on songs it had not seen); ghost notes are rough estimates; splash, china, tambourine and flams "
-                     "are not reliably detected yet. Check the score by ear.")
+                     "of the time on songs it had not seen). Tambourine/jingles played like a hi-hat are now picked out, but only "
+                     "about a third of them, and about half of the tambourine marks are right (tested on few real examples). "
+                     "Ghost notes are rough estimates; splash, china and flams are not detected yet. Check the score by ear.")
     return {
         "title": title, "duration_s": round(duration, 1), "tempo_bpm": round(rhythm["tempo_bpm"], 1),
         "tempo_detected": not params.get("tempo"), "tempo_alternatives": rhythm.get("alternatives_unresolved", [])[:6], "bars": report["n_bars"], "hits": report["counts"],

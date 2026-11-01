@@ -59,26 +59,59 @@ def features_for(events, y, pred, beat_s, instrument):
     return sel, np.array([hit_features(y, pred, e.time_s, fam, beat_s) for e in sel]) if sel else np.zeros((0, 21))
 
 
+RARE = ("splash", "china", "tambourine")
+
+
+def decide(proba, classes, thresholds):
+    """Most likely common class, unless a rare class (splash/china/tambourine) clears its own threshold:
+    a false splash or tambourine is worse than a missed one."""
+    common = [i for i, c in enumerate(classes) if c not in RARE]
+    out = []
+    for p in proba:
+        rare = [(p[i] / thresholds[c], c) for i, c in enumerate(classes) if c in thresholds and p[i] >= thresholds[c]]
+        out.append(max(rare)[1] if rare else classes[common[int(np.argmax(p[common]))]])
+    return out
+
+
 def apply(events, y, pred, beat_s):
-    """Relabel cymbals (ride/crash) and hi-hats (open/closed) with the trained models. Returns counts or None."""
+    """Relabel cymbals (ride/crash/splash/china) and hi-hats (open/closed); either may turn out to be a
+    tambourine (instrument "percussion"). Uses the multi-class models from scripts/train_cymbal_types.py when
+    present, else the ride/crash + open/closed models. Returns counts or None if no model file exists."""
     if not MODEL_PATH.exists():
         return None
     import joblib
     models = joblib.load(MODEL_PATH)
     out = {}
-    for inst, key, pos, neg in (("cymbal", "cymbal", "ride", "crash"), ("hihat", "hihat", "open", None)):
-        sel, X = features_for(events, y, pred, beat_s, inst)
-        if not len(sel) or key not in models:
+    feats = {inst: features_for(events, y, pred, beat_s, inst) for inst in ("cymbal", "hihat")}  # before any relabel
+    for inst in ("cymbal", "hihat"):
+        sel, X = feats[inst]
+        if not len(sel):
             continue
-        p = models[key].predict_proba(np.nan_to_num(X, nan=-60.0))[:, 1]
-        for e, pi in zip(sel, p, strict=True):
-            if inst == "cymbal":
-                # keep splash/china only if the heuristics found them; otherwise ride or crash
-                if e.articulation not in ("splash", "china"):
-                    e.articulation = pos if pi >= 0.5 else neg
+        Xn = np.nan_to_num(X, nan=-60.0)
+        multi = models.get(f"{inst}_multi")
+        if multi is not None:
+            proba = multi.predict_proba(Xn)
+            names = decide(proba, list(multi.classes_), models.get(f"{inst}_thresholds", {}))
+            conf = proba.max(1)
+        elif inst in models:
+            p = models[inst].predict_proba(Xn)[:, 1]
+            if inst == "cymbal":  # keep splash/china only if the heuristics found them
+                names = [e.articulation if e.articulation in ("splash", "china") else ("ride" if pi >= 0.5 else "crash")
+                         for e, pi in zip(sel, p, strict=True)]
             else:
-                e.articulation = pos if pi >= models.get("hihat_threshold", 0.5) else None
-            e.articulation_confidence = round(float(max(pi, 1 - pi)), 2)
-            e.articulation_features = {**(e.articulation_features or {}), "label_source": "learned (MDB Drums)"}
-        out[inst] = len(sel)
+                names = ["hihat_open" if pi >= models.get("hihat_threshold", 0.5) else "hihat" for pi in p]
+            conf = np.maximum(p, 1 - p)
+        else:
+            continue
+        for e, name, c in zip(sel, names, conf, strict=True):
+            if name == "tambourine":
+                e.instrument, e.articulation = "percussion", "tambourine"
+            elif inst == "cymbal":
+                e.articulation = name
+            else:
+                e.articulation = "open" if name == "hihat_open" else None
+            e.articulation_confidence = round(float(c), 2)
+            e.articulation_features = {**(e.articulation_features or {}), "label_source": "learned"}
+        out[inst] = dict(zip(*np.unique(names, return_counts=True), strict=True)) if names else {}
+        out[inst] = {str(k): int(v) for k, v in out[inst].items()}
     return out
