@@ -1,0 +1,8 @@
+[project]
+name = "drumscribe"
+version = "0.0.1"
+requires-python = ">=3.12,<3.13"
+dependencies = ["torch", "torchaudio", "librosa", "soundfile", "numpy", "scipy", "fastapi", "uvicorn"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]

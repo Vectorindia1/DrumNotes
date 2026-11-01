@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+node_modules/
+models/weights/
+data/incoming/
+data/processed/
+data/stems/
+outputs/
+.env
+third_party/
