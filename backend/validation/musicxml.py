@@ -20,7 +20,7 @@ def validate_musicxml(path, expected_bars=None):
         if (d := m.findtext("attributes/divisions")) is not None:
             divisions = int(d)
         if (b := m.findtext("attributes/time/beats")) is not None:
-            beats = int(b)
+            beats = int(b) * 4 / int(m.findtext("attributes/time/beat-type") or 4)  # in quarter notes
         if divisions is None or beats is None:
             problems.append(f"measure {num}: no divisions/time signature in effect")
             continue
@@ -31,5 +31,5 @@ def validate_musicxml(path, expected_bars=None):
                 per_voice[v] = per_voice.get(v, 0) + int(el.findtext("duration"))
         for v, total in per_voice.items():
             if total != divisions * beats:
-                problems.append(f"measure {num} voice {v}: duration {total} != {divisions * beats}")
+                problems.append(f"measure {num} voice {v}: duration {total} != {divisions * beats:g}")
     return problems

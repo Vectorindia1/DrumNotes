@@ -71,6 +71,13 @@
               <input id="tempo" type="number" min="30" max="300" step="0.1" placeholder="Detect automatically" inputmode="decimal">
               <small>If you know it, entering it gives cleaner bar lines.</small>
             </label>
+            <label>Time signature
+              <select id="meter">
+                <option value="auto">Detect automatically</option><option value="4/4">4/4</option><option value="3/4">3/4</option>
+                <option value="6/8">6/8</option><option value="12/8">12/8 (shuffle / swing)</option>
+              </select>
+              <small>Detected from the drum pattern; pick one if the bars look wrong.</small>
+            </label>
             <label>Hi-hat detail
               <select id="hats">
                 <option value="auto">As played (recommended)</option><option value="eighths">Simplify to eighths</option>

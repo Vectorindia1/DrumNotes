@@ -1,4 +1,4 @@
-"""Tempo from the detected drum hits (4/4 assumed), instead of the loudest pulse in the mix.
+"""Tempo (and meter: 4/4, 3/4, 6/8) from the detected drum hits, instead of the loudest pulse in the mix.
 
 Why: a beat tracker follows the strongest periodic pulse. A kick on dotted eighths (3 sixteenths) makes
 114 BPM look like 152 BPM (4/3), a shuffle can look 3/2 faster, etc. Here every instrument votes on a
@@ -78,6 +78,55 @@ def snap_hint(events, hint, span=0.03):
         return round(best, 2), (f"You entered {hint:g} BPM, but the drums lock to {best:.1f} BPM (at {hint:g} the hits drift "
                                 f"off the grid), so {best:.1f} was used.")
     return hint, None
+
+
+def _slots(events, q, inst):
+    """Hit times of `inst` as 16th-slot indices of a quarter tempo q (phase from all hits)."""
+    ts, p = _hit_times(events), 60.0 / q / 4
+    ph = float(np.angle(np.exp(2j * np.pi * ts / p).mean()) / (2 * np.pi) * p)
+    x = np.array([e.time_s for e in events if e.instrument == inst and e.grace_of is None])
+    return ph, p, np.round((x - ph) / p).astype(int)
+
+
+def _recur(k, lag):
+    s = set(k.tolist())
+    return sum(x + lag in s for x in s) / max(len(s), 1)
+
+
+def detect_meter(events, q, forced=None):
+    """4/4, 3/4, 6/8 or 12/8 for hits on the 16th grid of quarter tempo q, and the downbeat time.
+    A 12-slot bar is chosen only when kick/snare clearly repeat every 12 slots rather than every 16. Then where the
+    snare sits decides: once at the half-bar = 6/8 (slots are 16ths); on slots 3 and 9 = 12/8, i.e. a shuffle/swing
+    4/4 whose slots are triplet eighths; on slots 4 and 8 = 3/4. Returns (meter, downbeat_s or None, info)."""
+    ph, p, kick = _slots(events, q, "kick")
+    snare = _slots(events, q, "snare")[2]
+    if forced == "4/4" or len(kick) + len(snare) < 24:
+        return "4/4", None, {}
+    rep = {lag: round(_recur(kick, lag) + _recur(snare, lag), 3) for lag in (12, 16)}
+    if forced is None and rep[12] <= 1.15 * rep[16]:
+        return "4/4", None, {"recurrence": rep}
+    kh = np.bincount(kick % 12, minlength=12) / max(len(kick), 1)
+    sh = np.bincount(snare % 12, minlength=12) / max(len(snare), 1)
+    cands = [(kh[r] + sh[(r + 6) % 12], "6/8", r) for r in range(12)]
+    cands += [(kh[r] + (sh[(r + 4) % 12] + sh[(r + 8) % 12]) / 2, "3/4", r) for r in range(12)]
+    cands += [(kh[r] + (sh[(r + 3) % 12] + sh[(r + 9) % 12]) / 2, "12/8", r) for r in range(12)]
+    if forced in ("3/4", "6/8", "12/8"):
+        cands = [c for c in cands if c[1] == forced]
+    cands.sort(reverse=True)
+    (score, meter, r), runner = cands[0], next((c for c in cands[1:] if c[1] != cands[0][1]), None)
+    margin = round(float(score - runner[0]), 2) if runner else None
+    return meter, ph + r * p, {"recurrence": rep, "downbeat_score": round(float(score), 2), "margin_over_other_meter": margin}
+
+
+def relock(events, bpm, ratios=(0.75,)):
+    """The quarter tempo whose 16th grid the hits really lock to, when bpm's own grid clearly does not.
+    0.75: hits on TRIPLETS of bpm (a 6/8 song read as 4/4); for a typed tempo also 1.5 (dotted quarter typed,
+    as 6/8 is usually marked) and 0.5 (eighth notes typed). Returns bpm unchanged otherwise."""
+    here = refine(events, bpm, 0.01)[1]  # refined: over minutes, a 0.1 % tempo error alone washes coherence out
+    found = [refine(events, bpm * r, 0.01) for r in ratios]
+    c = max(x[1] for x in found)
+    q = max(x[0] for x in found if x[1] >= 0.9 * c)  # a coarser grid always fits at least as well: take the finest that fits
+    return q if c >= 0.5 and here < 0.5 * c else bpm
 
 
 def estimate_tempo(events, duration):

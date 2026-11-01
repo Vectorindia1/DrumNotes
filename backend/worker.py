@@ -45,6 +45,7 @@ def summarise(report, params, title, duration):
     return {
         "title": title, "duration_s": round(duration, 1), "tempo_bpm": round(rhythm["tempo_bpm"], 1),
         "tempo_detected": not params.get("tempo"), "tempo_alternatives": rhythm.get("alternatives_unresolved", [])[:6], "bars": report["n_bars"], "hits": report["counts"],
+        "time_signature": rhythm.get("time_signature"), "marking": rhythm.get("marking"),
         "articulations": {ART_LABELS[k]: v for k, v in arts.items() if k in ART_LABELS and v},
         "notes": notes, "validation_ok": report["ok"],
     }
@@ -67,7 +68,7 @@ def main(job_dir):
     audio = next(job_dir.glob("audio.*"))
     try:
         files, report, _ = run(audio, out, tempo_hint=p.get("tempo"), separate=p.get("separate", False), player=True,
-                               kit=p.get("kit", "standard"), hat_detail=p.get("hat_detail", "auto"), title=job["title"], stem_dir=job_dir / "stems",
+                               kit=p.get("kit", "standard"), hat_detail=p.get("hat_detail", "auto"), meter=p.get("meter", "auto"), title=job["title"], stem_dir=job_dir / "stems",
                                progress=lambda stage, frac: emit("PROGRESS", stage=stage, frac=frac))
         if not report["ok"]:
             raise RuntimeError("; ".join(report["validation"]["musicxml_problems"] + report["validation"]["pdf_problems"]))

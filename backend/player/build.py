@@ -37,7 +37,7 @@ def _parse_positions(path):
     return els, ev
 
 
-def measures_and_stops(mpos, spos, tempo, n_bars, page_px_width):
+def measures_and_stops(mpos, spos, tempo, n_bars, page_px_width, beats_per_bar=4):
     """Per measure: start time (s), box, and (time, x) stops from segment positions, converted to
     page-image pixels. MuseScore's position units are not pixels; the scale is recovered from the
     page width (margins are symmetric, so page width = left margin + right edge of the staves)."""
@@ -51,7 +51,7 @@ def measures_and_stops(mpos, spos, tempo, n_bars, page_px_width):
     beat = 60.0 / tempo
     starts = [t / 1000 for t, _ in mev]
     boxes = [mels[i] for _, i in mev]
-    ends = starts[1:] + [starts[-1] + 4 * beat]
+    ends = starts[1:] + [starts[-1] + beats_per_bar * beat]
     out = []
     for k, (t0, t1, b) in enumerate(zip(starts, ends, boxes, strict=True)):
         segs = [(t / 1000, sels[i]["x"]) for t, i in sev if t0 - 1e-6 <= t / 1000 < t1 - 1e-6 and sels[i]["page"] == b["page"]
@@ -91,9 +91,10 @@ def build_player(musicxml, out_dir, grid, bars, title, tempo, audio_sources, kit
         w, h = struct.unpack(">II", png.read_bytes()[16:24])  # IHDR width/height
         shutil.move(png, out / f"page{i}.png")
         pages.append({"src": f"page{i}.png", "w": w, "h": h})
-    measures = measures_and_stops(work / "score.mpos", work / "score.spos", tempo, n_bars, pages[0]["w"])
-    bar_starts = [m["t"] for m in measures] + [measures[-1]["t"] + 4 * 60.0 / tempo]
-    beats_score = [bar_starts[i] + j * (bar_starts[i + 1] - bar_starts[i]) / 4 for i in range(len(measures)) for j in range(4)]
+    bpb = grid.beats_per_bar
+    measures = measures_and_stops(work / "score.mpos", work / "score.spos", tempo, n_bars, pages[0]["w"], bpb)
+    bar_starts = [m["t"] for m in measures] + [measures[-1]["t"] + bpb * 60.0 / tempo]
+    beats_score = [bar_starts[i] + j * (bar_starts[i + 1] - bar_starts[i]) / bpb for i in range(len(measures)) for j in range(bpb)]
     try:
         notes = score_notes(bars, bar_starts)
         render(notes, out / "score.flac", kit=kit)

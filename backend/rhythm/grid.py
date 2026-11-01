@@ -13,7 +13,7 @@ from dataclasses import dataclass
 import librosa
 import numpy as np
 
-from backend.rhythm.tempo import estimate_tempo, snap_hint
+from backend.rhythm.tempo import detect_meter, estimate_tempo, refine, relock, snap_hint
 
 SLOTS_PER_BEAT = 4
 
@@ -34,6 +34,17 @@ class Grid:
     phase_shift_s: float = 0.0  # grid shifted by this to line up with the measured attacks
     tempo_basis: str = ""
     tempo_note: str | None = None  # e.g. a typed tempo that was corrected to what the drums lock to
+    meter: str = ""  # "6/8" / "3/4" when detected from the pattern; "" = beats_per_bar/4
+
+    @property
+    def time_signature(self):
+        return self.meter or f"{self.beats_per_bar}/4"
+
+    @property
+    def marking(self):
+        """The tempo as printed on the score (6/8 and 12/8 count dotted quarters)."""
+        f = {"6/8": 2 / 3, "12/8": 4 / 3}.get(self.meter)
+        return f"dotted quarter = {self.tempo_bpm * f:.0f}" if f else f"quarter = {self.tempo_bpm:.0f}"
 
     @property
     def slots_per_bar(self):
@@ -63,7 +74,9 @@ class Grid:
             "tempo_basis": self.tempo_basis,
             "tempo_note": self.tempo_note,
             "alternatives_unresolved": [round(a, 2) for a in self.tempo_alternatives],
-            "meter": f"{self.beats_per_bar}/4 (assumed, not detected)",
+            "meter": f"{self.meter} (detected from the drum pattern)" if self.method == "pattern" else f"{self.time_signature} (assumed or chosen)",
+            "time_signature": self.time_signature,
+            "marking": self.marking,
             "phase_calibration_ms": round(self.phase_shift_s * 1000, 1),
             "downbeat": self.phase_note or "not detected: bar 1 starts at the first grid beat at/before t=0",
         }
@@ -82,10 +95,12 @@ def _extend(beats, period, duration, beats_per_bar, anchor_is_downbeat=True):
     return np.array(beats)
 
 
-def estimate_grid(audio_path, duration, tempo_hint=None, beats_per_bar=4, offset=None, events=None):
+def estimate_grid(audio_path, duration, tempo_hint=None, beats_per_bar=4, offset=None, events=None, meter="auto"):
     """With `events` (the detected hits) the tempo comes from the drum pattern, not the loudest pulse of the mix,
-    and a typed tempo is checked against the hits (see tempo.py)."""
+    and a typed tempo is checked against the hits (see tempo.py). meter: auto | 4/4 | 3/4 | 6/8 | 12/8. A 3/4,
+    6/8 or 12/8 bar is 12 slots (beats_per_bar 3 of the grid's quarter tempo; in 12/8 a slot is notated as an eighth)."""
     tempo_note = tempo_basis = drum_alts = None
+    typed = tempo_hint
     if events:
         if tempo_hint and offset is None:
             tempo_hint, tempo_note = snap_hint(events, tempo_hint)
@@ -96,9 +111,26 @@ def estimate_grid(audio_path, duration, tempo_hint=None, beats_per_bar=4, offset
                 tempo_hint, info = found
                 tempo_basis = f"drum pattern (grid lock {info['grid_coherence']:.2f})"
                 drum_alts = info["alternatives"]
+    if events and tempo_hint and offset is None and meter != "4/4":
+        q, lock = refine(events, relock(events, tempo_hint, (0.75, 1.5, 0.5) if typed else (0.75,)), 0.01)
+        if lock >= 0.5:
+            m, down, info = detect_meter(events, q, None if meter == "auto" else meter)
+            if m != "4/4":
+                grid = Grid(_extend([down], 60.0 / q, duration, 3), 3, "pattern", float(q),
+                            sorted({round(tempo_hint, 1), round(q / 2, 1), round(q * 2, 1)} - {round(q, 1)}), meter=m)
+                grid.tempo_basis = (tempo_basis or "") + f"; {m} found from the drum pattern" + (" (you chose it)" if meter != "auto" else "")
+                why = {"6/8": "kick on 1, snare on the 4th eighth", "12/8": "a shuffle: triplet eighths, snare on 2 and 4",
+                       "3/4": "kick on 1, snare on 2/3"}[m]
+                grid.tempo_note = tempo_note or (f"The drums repeat every 12 steps ({why}), so the score is in {m}, {grid.marking}. "
+                                                 "If that is wrong, choose the time signature under More options.")
+                grid.phase_note = f"from the drum pattern ({why}): {info}"
+                return grid
+    compound = meter if meter in ("6/8", "12/8") else ""  # chosen, but the hits are not steady enough to place the bar
+    if meter in ("3/4", "6/8", "12/8"):
+        beats_per_bar = 3
     if tempo_hint and offset is not None:
         period = 60.0 / tempo_hint
-        grid = Grid(_extend([offset], period, duration, beats_per_bar), beats_per_bar, "hint", float(tempo_hint), [])
+        grid = Grid(_extend([offset], period, duration, beats_per_bar), beats_per_bar, "hint", float(tempo_hint), [], meter=compound)
         grid.phase_note = "hint offset taken as beat 1"
         grid.tempo_alternatives = [tempo_hint / 2, tempo_hint * 2]
         grid.tempo_basis = "tempo and offset entered by the user (exact grid)"
@@ -118,7 +150,7 @@ def estimate_grid(audio_path, duration, tempo_hint=None, beats_per_bar=4, offset
         tracked = float(np.atleast_1d(librosa.feature.tempo(y=y, sr=sr))[0])
         if abs(tracked - bpm) / bpm > 0.03 and all(abs(tracked - a) / a > 0.03 for a in alts):
             alts = sorted([*alts, round(tracked, 1)])
-    grid = Grid(_extend(list(times), period, duration, beats_per_bar, False), beats_per_bar, method, bpm, alts)
+    grid = Grid(_extend(list(times), period, duration, beats_per_bar, False), beats_per_bar, method, bpm, alts, meter=compound)
     grid.tempo_basis, grid.tempo_note = tempo_basis or "beat tracker on the mix", tempo_note
     return grid
 

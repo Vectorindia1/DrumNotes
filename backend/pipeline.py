@@ -74,7 +74,7 @@ def fill_groove(events, grid, env, n_bars, lock):
 
 
 def run(audio_path, out_dir="outputs", tempo_hint=None, beats_per_bar=4, offset=None, title=None, beat1=None,
-        separate=False, player=False, kit="standard", progress=None, stem_dir="data/stems", hat_detail="auto"):
+        separate=False, player=False, kit="standard", progress=None, stem_dir="data/stems", hat_detail="auto", meter="auto"):
     """progress(stage, fraction) is called as each stage starts (used by the web worker)."""
     def tick(stage, frac):
         if progress:
@@ -103,7 +103,8 @@ def run(audio_path, out_dir="outputs", tempo_hint=None, beats_per_bar=4, offset=
         traceback.print_exc(file=sys.stderr)
         art_summary = {"error": f"{type(exc).__name__}: {exc}"[:200]}  # `events` is untouched: plain notation
     tick("Working out tempo and bar lines", 0.72 if separate else 0.45)
-    grid = estimate_grid(audio_path, duration, tempo_hint, beats_per_bar, offset, events=events)
+    grid = estimate_grid(audio_path, duration, tempo_hint, beats_per_bar, offset, events=events, meter=meter)
+    beats_per_bar = grid.beats_per_bar
     try:  # learned ride/crash + open/closed hi-hat labels (replace the heuristics when the model is present)
         learned = labels.apply(events, y, pred, 60.0 / grid.tempo_bpm)
     except Exception as exc:  # noqa: BLE001 - optional, never fatal
@@ -129,7 +130,7 @@ def run(audio_path, out_dir="outputs", tempo_hint=None, beats_per_bar=4, offset=
         "report": out / "json" / f"{stem}.report.json",
     }
     tick("Writing the notation", 0.78 if separate else 0.55)
-    paths["musicxml"].write_text(bars_to_musicxml(bars, title or stem, grid.tempo_bpm, beats_per_bar))
+    paths["musicxml"].write_text(bars_to_musicxml(bars, title or stem, grid.tempo_bpm, beats_per_bar, grid.time_signature))
     xml_problems = validate_musicxml(paths["musicxml"], expected_bars=len(bars))
     tick("Engraving the PDF", 0.82 if separate else 0.65)
     render_pdf(paths["musicxml"], paths["pdf"])
@@ -192,11 +193,12 @@ if __name__ == "__main__":
     ap.add_argument("--separate", action="store_true", help="detect on the Demucs drum stem (slow on CPU)")
     ap.add_argument("--kit", default="standard", help="drum kit for the score audio: standard, room, power, electronic, 808, jazz, brush")
     ap.add_argument("--hats", default="auto", choices=("auto", "eighths"), help="hi-hat: auto = as detected (default); eighths = simplify by dropping quiet in-between 16ths")
+    ap.add_argument("--meter", default="auto", choices=("auto", "4/4", "3/4", "6/8", "12/8"), help="time signature (auto = from the drum pattern)")
     ap.add_argument("--player", action="store_true", help="also build the blue-playhead score player")
     a = ap.parse_args()
     try:
         a.audio = str(resolve_input(a.audio))
     except UnsupportedSource as e:
         raise SystemExit(f"error: {e}") from None
-    files, rep, _ = run(a.audio, a.out, a.tempo, a.beats_per_bar, a.offset, beat1=a.beat1, separate=a.separate, player=a.player, kit=a.kit, hat_detail=a.hats)
+    files, rep, _ = run(a.audio, a.out, a.tempo, a.beats_per_bar, a.offset, beat1=a.beat1, separate=a.separate, player=a.player, kit=a.kit, hat_detail=a.hats, meter=a.meter)
     print(json.dumps({"files": files, "report": rep}, indent=1))

@@ -78,3 +78,37 @@ def test_pipeline_without_a_tempo_finds_it_from_the_audio(tmp_path, bpm):
     _, report, _ = run(wav, tmp_path / "out")
     assert report["rhythm"]["tempo_bpm"] == pytest.approx(bpm, rel=0.015)
     assert report["rhythm"]["tempo_basis"].startswith("drum pattern") and report["rhythm"]["alternatives_unresolved"]
+
+
+def compound_song(meter, q=82.0, bars=40, start=0.37):
+    """12-slot bars at quarter tempo q (slot = q's 16th). '6/8': kick 1, snare on the 4th eighth (slot 6), hats on
+    eighths (the reported 'Yeh Fitoor Mera' pattern). '12/8': shuffle, snare on slots 3 and 9, hats on every slot.
+    '3/4': waltz, kick 1, snare on beats 2 and 3, hats on eighths."""
+    slot = 60.0 / q / 4
+    pat = {"6/8": ({0, 4, 10}, {6}, range(0, 12, 2)), "12/8": ({0, 8}, {3, 9}, range(12)),
+           "3/4": ({0}, {4, 8}, range(0, 12, 2))}[meter]
+    ev = [Event("", start + (b * 12 + s) * slot, 0, inst, 1.0, {})
+          for b in range(bars) for inst, slots in zip(("kick", "snare", "hihat"), pat, strict=True) for s in slots]
+    return sorted(ev, key=lambda e: e.time_s), start + bars * 12 * slot + 1
+
+
+@pytest.mark.parametrize("meter", ["6/8", "12/8", "3/4"])
+def test_meter_and_downbeat_from_the_pattern(meter):
+    ev, _ = compound_song(meter)
+    m, down, _ = T.detect_meter(ev, 82.0)
+    assert m == meter
+    assert (down - 0.37) / (60 / 82.0 * 3) == pytest.approx(round((down - 0.37) / (60 / 82.0 * 3)), abs=1e-6)  # on a bar line
+
+
+def test_six_eight_read_as_four_four_triplets_is_relocked():
+    """The bug: a 6/8 song was scored as 4/4 at 109.5 (= 82 x 4/3), putting every hat on the wrong slot."""
+    ev, _ = compound_song("6/8")
+    assert T.relock(ev, 82.0 * 4 / 3) == pytest.approx(82.0, rel=0.002)
+    assert T.relock(ev, 55.0 * 1.0, (0.75, 1.5, 0.5)) == pytest.approx(82.0, rel=0.01)  # dotted quarter typed
+
+
+def test_four_four_stays_four_four():
+    for kick in ("dotted", "four", "rock"):
+        ev, _ = song(110.0, kick=kick)
+        assert T.relock(ev, 110.0) == 110.0
+        assert T.detect_meter(ev, 110.0)[0] == "4/4"

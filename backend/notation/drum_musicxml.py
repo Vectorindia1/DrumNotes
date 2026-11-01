@@ -31,20 +31,26 @@ LEGEND = ("Key: x hi-hat | circled x open hi-hat | x top line ride | x ledger cr
           "down-triangle splash | up-triangle china | x 4th space tamb./shaker | (n) ghost | grace note flam")
 
 
-def _rests(start, n):
+def _fits(start, size, group):
+    """A note/rest may not cross a beat group (6 sixteenths = a dotted quarter in 6/8)."""
+    return start % size == 0 and start % group + size <= group
+
+
+def _rests(start, n, group=16):
     out = []
     while n > 0:
-        size = next(s for s in (16, 8, 4, 2, 1) if s <= n and start % s == 0)
+        size = next(s for s in (16, 8, 4, 2, 1) if s <= n and _fits(start, s, group))
         out.append((start, size))
         start, n = start + size, n - size
     return out
 
 
-def _rest_xml(voice, size):
-    return f"<note><rest/><duration>{size}</duration><voice>{voice}</voice><type>{TYPE[size]}</type></note>"
+def _rest_xml(voice, size, scale=1):
+    return f"<note><rest/><duration>{size * scale}</duration><voice>{voice}</voice><type>{TYPE[size * scale]}</type></note>"
 
 
-def _note_xml(key, voice, size, chord, stem, grace=False):
+def _note_xml(key, voice, size, chord, stem, grace=False, scale=1):
+    size *= scale
     step, octave, midi, paren, _, head = KIT[key]
     return (
         "<note>" + ('<grace slash="yes"/>' if grace else "") + ("<chord/>" if chord else "")
@@ -64,43 +70,53 @@ def _label_xml(labels):
     )
 
 
-def _voice_xml(slots, voice, stem):
-    """slots: list of sets (note keys in this voice). Always sums to len(slots) divisions."""
+def _voice_xml(slots, voice, stem, group=16, scale=1):
+    """slots: list of sets (note keys in this voice). Always sums to len(slots)*scale divisions
+    (scale 2 = each slot is an eighth, for 12/8)."""
     n = len(slots)
     onsets = [i for i, s in enumerate(slots) if s]
     if not onsets:
-        return f'<note><rest measure="yes"/><duration>{n}</duration><voice>{voice}</voice></note>'
-    xml = "".join(_rest_xml(voice, size) for _, size in _rests(0, onsets[0]))
+        return f'<note><rest measure="yes"/><duration>{n * scale}</duration><voice>{voice}</voice></note>'
+    xml = "".join(_rest_xml(voice, size, scale) for _, size in _rests(0, onsets[0], group))
     for k, i in enumerate(onsets):
         nxt = onsets[k + 1] if k + 1 < len(onsets) else n
-        size = next(s for s in (4, 2, 1) if s <= nxt - i and i % s == 0)
+        size = next(s for s in (4, 2, 1) if s <= nxt - i and _fits(i, s, group) and s * scale <= 4)
         keys = sorted(slots[i], key=ORDER.index)
         xml += _label_xml(sorted({KIT[k][4] for k in keys if KIT[k][4]}))
         for j, key in enumerate(keys):
             if key == "snare_flam":
-                xml += _note_xml(key, voice, size, False, stem, grace=True)
-            xml += _note_xml(key, voice, size, j > 0, stem)
-        xml += "".join(_rest_xml(voice, sz) for _, sz in _rests(i + size, nxt - i - size))
+                xml += _note_xml(key, voice, size, False, stem, grace=True, scale=scale)
+            xml += _note_xml(key, voice, size, j > 0, stem, scale=scale)
+        xml += "".join(_rest_xml(voice, sz, scale) for _, sz in _rests(i + size, nxt - i - size, group))
     return xml
 
 
-def bars_to_musicxml(bars, title="Drum score", tempo=100, beats_per_bar=4):
+def bars_to_musicxml(bars, title="Drum score", tempo=100, beats_per_bar=4, time_signature=None):
+    """tempo: quarter notes per minute of the slot grid (a slot = tempo's 16th). time_signature "6/8": 12 slots of
+    16ths, marked dotted quarter = tempo*2/3. "12/8": 12 slots of EIGHTHS (a shuffle), dotted quarter = tempo*4/3,
+    played at quarter = tempo*2. Otherwise beats_per_bar/4."""
     n = beats_per_bar * 4
+    sig = time_signature or f"{beats_per_bar}/4"
+    top, bottom = sig.split("/")
+    group, scale = {"6/8": (6, 1), "12/8": (3, 2)}.get(sig, (n, 1))
+    dotted = "<beat-unit>quarter</beat-unit><beat-unit-dot/>"
+    mark = {"6/8": (dotted, tempo * 2 / 3), "12/8": (dotted, tempo * 4 / 3)}.get(sig, ("<beat-unit>quarter</beat-unit>", tempo))
+    play = tempo * scale
     body = []
     for b, bar in enumerate(bars):
         assert len(bar) == n, f"bar {b} has {len(bar)} slots, expected {n}"
         attrs = ""
         if b == 0:
             attrs = (
-                f"<attributes><divisions>4</divisions><time><beats>{beats_per_bar}</beats><beat-type>4</beat-type></time>"
+                f"<attributes><divisions>4</divisions><time><beats>{top}</beats><beat-type>{bottom}</beat-type></time>"
                 "<clef><sign>percussion</sign><line>2</line></clef></attributes>"
-                '<direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit>'
-                f'<per-minute>{round(tempo)}</per-minute></metronome></direction-type><sound tempo="{tempo:.1f}"/></direction>'
+                '<direction placement="above"><direction-type><metronome>'
+                f'{mark[0]}<per-minute>{round(mark[1])}</per-minute></metronome></direction-type><sound tempo="{play:.1f}"/></direction>'
             )
-        hands = _voice_xml([s - FEET for s in bar], 1, "up")
+        hands = _voice_xml([s - FEET for s in bar], 1, "up", group, scale)
         feet = ""
         if any(s & FEET for s in bar):
-            feet = f"<backup><duration>{n}</duration></backup>" + _voice_xml([s & FEET for s in bar], 2, "down")
+            feet = f"<backup><duration>{n * scale}</duration></backup>" + _voice_xml([s & FEET for s in bar], 2, "down", group, scale)
         body.append(f'<measure number="{b + 1}">{attrs}{hands}{feet}</measure>')
     midis = {v[2]: k for k, v in reversed(list(KIT.items()))}
     insts = "".join(

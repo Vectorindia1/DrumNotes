@@ -34,3 +34,15 @@ def test_validator_catches_short_bar(tmp_path):
     p = _write(tmp_path, [[set() for _ in range(16)]])
     p.write_text(re.sub(r"<duration>16</duration>", "<duration>12</duration>", p.read_text()))
     assert validate_musicxml(p) != []
+
+
+def test_compound_meters_write_valid_bars(tmp_path):
+    from backend.notation.drum_musicxml import bars_to_musicxml
+    from backend.validation.musicxml import validate_musicxml
+    bars = [[{"hihat", "kick"} if s % 2 == 0 else set() for s in range(12)], [{"snare"} if s == 6 else set() for s in range(12)]]
+    for sig, beat_type, mark in (("6/8", "8", "55"), ("12/8", "8", "109"), ("3/4", "4", "82")):
+        xml = bars_to_musicxml(bars, "t", 82.0, 3, sig)
+        assert f"<beat-type>{beat_type}</beat-type>" in xml and f"<per-minute>{mark}</per-minute>" in xml
+        p = tmp_path / f"{sig.replace('/', '_')}.musicxml"
+        p.write_text(xml)
+        assert validate_musicxml(p, expected_bars=2) == [], sig
