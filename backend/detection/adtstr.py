@@ -123,3 +123,52 @@ def transcribe(y, sr, batch_size=16):
     allnotes = np.unique(np.concatenate(notes), axis=0)  # same de-duplication as the original
     out = allnotes[:, [0, 2, 3]]
     return out[np.argsort(out[:, 0], kind="stable")]
+
+
+MATCH_S = 0.04
+
+
+def relabel(events, hits):
+    """Take the LABELS from ADT_STR, keep our hits and timing. hits: (onset_s, class, velocity).
+    - hi-hat: open / closed from the nearest ADT_STR hi-hat note; a 'hi-hat' that ADT_STR hears only as
+      tambourine/shaker (no hat within MATCH_S) becomes instrument 'percussion' with that articulation
+    - cymbal: crash / ride / china / splash from the nearest ADT_STR cymbal note
+    Returns counts of what changed. Events without an ADT_STR counterpart keep their current label."""
+    import bisect
+    by = {}
+    for t, c, _v in hits:
+        if int(c) in CLASSES:
+            by.setdefault(CLASSES[int(c)][0], []).append((float(t), CLASSES[int(c)][1]))
+    for v in by.values():
+        v.sort()
+
+    def nearest(kind, t):
+        arr = by.get(kind, [])
+        i = bisect.bisect_left(arr, (t,))
+        best = None
+        for j in (i - 1, i):
+            if 0 <= j < len(arr) and abs(arr[j][0] - t) <= MATCH_S and (best is None or abs(arr[j][0] - t) < abs(best[0] - t)):
+                best = arr[j]
+        return best
+    changed = {"hat_open": 0, "hat_closed": 0, "to_percussion": 0, "cymbal_typed": 0}
+    for e in events:
+        if e.grace_of is not None:
+            continue
+        if e.instrument == "hihat":
+            h = nearest("hihat", e.time_s)
+            if h:
+                e.articulation = "open" if h[1] == "open" else None
+                changed["hat_open" if h[1] == "open" else "hat_closed"] += 1
+            else:
+                p = nearest("percussion", e.time_s)
+                if p and p[1] in ("tambourine", "shaker"):
+                    e.instrument, e.articulation = "percussion", p[1]
+                    changed["to_percussion"] += 1
+        elif e.instrument == "cymbal":
+            c = nearest("cymbal", e.time_s)
+            if c:
+                e.articulation = c[1]
+                changed["cymbal_typed"] += 1
+        if e.instrument in ("hihat", "cymbal", "percussion"):
+            e.articulation_features = {**(e.articulation_features or {}), "label_source": "adt_str"}
+    return changed

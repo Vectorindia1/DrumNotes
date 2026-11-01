@@ -39,7 +39,9 @@ def summarise(report, params, title, duration):
     if "error" in arts:
         notes.append("Ghost notes, open hi-hats and cymbal types could not be analysed for this file, so the score shows plain notes.")
     else:
-        notes.append("Ghost notes, open hi-hats and cymbal types are estimates. Flams are not detected yet. Check the score by ear.")
+        notes.append("Ride vs crash and open vs closed hi-hat come from a model trained on real recordings (right about 90 % and 94 % "
+                     "of the time on songs it had not seen); ghost notes are rough estimates; splash, china, tambourine and flams "
+                     "are not reliably detected yet. Check the score by ear.")
     return {
         "title": title, "duration_s": round(duration, 1), "tempo_bpm": round(rhythm["tempo_bpm"], 1),
         "tempo_detected": not params.get("tempo"), "tempo_alternatives": rhythm.get("alternatives_unresolved", [])[:6], "bars": report["n_bars"], "hits": report["counts"],

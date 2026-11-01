@@ -21,12 +21,14 @@ KIT = {
     "crash": ("A", 5, 49, False, None, "x"),
     "splash": ("B", 5, 55, False, "splash", "inverted triangle"),
     "china": ("C", 6, 52, False, "china", "triangle"),
+    "tambourine": ("E", 5, 54, False, "tamb.", "x"),
+    "shaker": ("E", 5, 70, False, "shaker", "x"),
 }
 ORDER = list(KIT)  # low -> high within a chord
 TYPE = {1: "16th", 2: "eighth", 4: "quarter", 8: "half", 16: "whole"}
 FEET = {"kick"}
 LEGEND = ("Key: x hi-hat | circled x open hi-hat | x top line ride | x ledger crash | "
-          "down-triangle splash | up-triangle china | (n) ghost | grace note flam")
+          "down-triangle splash | up-triangle china | x 4th space tamb./shaker | (n) ghost | grace note flam")
 
 
 def _rests(start, n):

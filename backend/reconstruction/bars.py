@@ -10,6 +10,8 @@ def note_key(e):
         return {"ghost": "snare_ghost", "flam": "snare_flam"}.get(a, "snare")
     if e.instrument == "hihat":
         return "hihat_open" if a == "open" else "hihat"
+    if e.instrument == "percussion":
+        return e.articulation if e.articulation in ("tambourine", "shaker") else "tambourine"
     if e.instrument == "cymbal":
         return a if a in CYMBALS else "crash"  # unclassified cymbal defaults to crash
     return e.instrument

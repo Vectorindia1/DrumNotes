@@ -6,7 +6,7 @@ from backend.events import SCHEMA_VERSION
 from backend.reconstruction.bars import note_key
 
 GM_PITCH = {"kick": 36, "snare": 38, "snare_ghost": 38, "snare_flam": 38, "tom": 47, "hihat": 42,
-            "hihat_open": 46, "ride": 51, "crash": 49, "splash": 55, "china": 52}
+            "hihat_open": 46, "ride": 51, "crash": 49, "splash": 55, "china": 52, "tambourine": 54, "shaker": 70}
 
 
 def write_midi(events, path, tempo):

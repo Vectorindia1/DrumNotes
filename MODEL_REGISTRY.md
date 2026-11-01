@@ -41,9 +41,17 @@ Production approval (PRD §5.3): none granted.
 | TimGM6mb.sf2 | Debian `timgm6mb-soundfont` | GPL-2 | fallback only |
 | pyfluidsynth 1.4.0 (+ system libfluidsynth.so.3) | PyPI | LGPL-2.1 | used, dev dependency |
 
-## ADT_STR (candidate, 2026-11-01) - DOWNLOADED, NOT EXECUTED
+## ADT_STR (2026-11-01) - EVALUATED AND REJECTED (see bottom)
 - huggingface.co/Pierfrancesco/adt-str (paper arXiv 2601.09520, code github.com/pier-maker92/ADT_STR). Seq2seq transformer, 69 M params, 24 kHz, 2.56 s chunks, 10 ms resolution, trained on synthetic audio rendered from MIDI; reports state of the art on ENST and MDB test sets (third-party claim, not reproduced).
 - 26 classes incl. closed/pedal/open hi-hat, crash, ride (+bell), china, splash, tambourine, shaker, cowbell, triangle, floor/mid/high tom, side stick, clap: exactly the distinctions ADTOF cannot make (ADTOF merges tambourine into hi-hat and all cymbals into one class).
 - Licence: CC BY-SA 4.0 per the GitHub README; the HF model card states none -> UNVERIFIED.
 - Downloaded: code + setting-tau-0.8 only, third_party/adt-str (git-ignored), model.safetensors sha256 f94d1773d929166e0a3f63d305975aa6667512f8a71d7706872e1f8b23ca930b (289 MB). Code read; scan found no shell/network/eval calls (one torch.load fallback, unused with safetensors). Deps added: transformers 5.22.1, omegaconf.
 - Running it was blocked by the auto-mode permission classifier (external code). `scripts/try_adtstr.py AUDIO` runs it for evaluation once the user allows/runs it.
+
+### ADT_STR evaluation result (2026-11-01): REJECTED
+- Executed with user permission. Original decoder: up to 27x slower than real time on this CPU. Bug found: decoder self-attention masks the future with an additive -1e4, but attention scores reach ~1.26e6, so future tokens leak (logits for a position change with sequence length; a true -inf mask gives zero difference). The model was trained with the leak. `backend/detection/adtstr.py` = correct-causal cached decoder, 0.6x real time, not token-identical (cannot be, given the leak).
+- On MDB full mixes AND drum-only stems, both decoders mislabel hi-hats massively (e.g. Hendrix 64 closed hats -> 0 hats; Rock hats -> cowbell/claves/tambourine; loudness normalisation turns hats into "tambourine"). Not used anywhere. Kept only for reproducibility of the evaluation.
+
+## Learned labels (2026-11-01) - IN USE
+- `backend/detection/labels.py`, model `models/weights/labels.joblib` (git-ignored, ~1 MB), trained by `scripts/train_labels.py` on MDB Drums full mixes (CC BY-NC-SA -> model non-commercial). sklearn HistGradientBoosting on 21 features per hit (band energies, spectral shape, decay to the next hit, ADTOF activations, spacing in beats).
+- Leave-one-song-out (23 songs): ride vs crash accuracy 0.551 -> 0.903 (ride F1 0.654 -> 0.942, ~81 % of crashes found); open hi-hat F1 0.556 -> 0.680 (false opens 161 -> 69; threshold 0.6 chosen on held-out predictions, slightly optimistic). Splash/china/tambourine: too few examples to learn.

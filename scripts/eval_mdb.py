@@ -36,7 +36,7 @@ ADTSTR = {35: ("kick", "kick"), 36: ("kick", "kick"), 37: ("snare", "snare"), 38
           40: ("snare", "snare"), 41: ("tom", "tom"), 45: ("tom", "tom"), 47: ("tom", "tom"), 42: ("hihat", "hat_closed"),
           43: ("hihat", "hat_closed"), 44: ("hihat", "hat_open"), 46: ("cymbal", "crash"), 48: ("cymbal", "ride"),
           49: ("cymbal", "china"), 50: ("tambourine", "tambourine"), 51: ("cymbal", "splash")}
-COARSE = ("kick", "snare", "tom", "hihat", "cymbal")
+COARSE = ("kick", "snare", "tom", "hihat", "cymbal")  # "percussion" (tambourine/shaker) is scored as the fine class only
 FINE = ("hat_closed", "hat_open", "ride", "crash", "china", "splash", "ghost", "tambourine")
 
 
@@ -59,15 +59,24 @@ def ours_fine(e):
     return e.instrument
 
 
-def systems_for(song, audio, use_adtstr):
+def systems_for(song, audio, use_adtstr, adtstr_dir="outputs/adtstr"):
     raw, _ = adtof.detect(audio)
     out = {"adtof": [(e.time_s, e.instrument, None) for e in raw]}
     with tempfile.TemporaryDirectory() as d:
         _, _, ev = run(audio, d, player=False)
     out["ours"] = [(e.time_s, e.instrument, ours_fine(e)) for e in ev if e.notated and e.grace_of is None]
-    cache = pathlib.Path("outputs/adtstr") / f"{audio.stem}.hits.pkl"
+    cache = pathlib.Path(adtstr_dir) / f"{audio.stem}.hits.pkl"
     if use_adtstr and cache.exists():
-        out["adtstr"] = [(t, *ADTSTR[p]) for t, p, _ in pickle.loads(cache.read_bytes()) if p in ADTSTR]
+        hits = pickle.loads(cache.read_bytes())
+        out["adtstr"] = [(t, *ADTSTR[p]) for t, p, _ in hits if p in ADTSTR]
+        import copy
+
+        from backend.detection.adtstr import relabel
+        ev2 = copy.deepcopy(ev)
+        relabel(ev2, hits)
+        out["hybrid"] = [(e.time_s, "tambourine" if e.instrument == "percussion" and e.articulation == "tambourine" else e.instrument,
+                          "tambourine" if e.instrument == "percussion" and e.articulation == "tambourine" else ours_fine(e))
+                         for e in ev2 if e.notated and e.grace_of is None]
     return out
 
 
@@ -89,6 +98,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--adtstr", action="store_true", help="include ADT_STR (cached hits needed)")
     ap.add_argument("--songs", nargs="*", help="limit to these song names")
+    ap.add_argument("--adtstr-dir", default="outputs/adtstr", help="cache dir: outputs/adtstr (fast) or outputs/adtstr_orig")
     a = ap.parse_args()
     counts = collections.defaultdict(lambda: collections.defaultdict(lambda: {"tp": 0, "fp": 0, "fn": 0}))
     confusion = collections.defaultdict(collections.Counter)
@@ -96,7 +106,7 @@ if __name__ == "__main__":
     for song in songs if not a.songs else [s for s in songs if s in a.songs]:
         audio = ROOT / "audio/full_mix" / f"{song}_MIX.wav"
         truth = truth_of(song)
-        for name, det in systems_for(song, audio, a.adtstr).items():
+        for name, det in systems_for(song, audio, a.adtstr, a.adtstr_dir).items():
             for c in COARSE:
                 tally(counts[name], c, [t for t, k, _ in det if k == c], [t for t, k, _ in truth if k == c])
             if name != "adtof":
@@ -117,6 +127,7 @@ if __name__ == "__main__":
         res[name]["cymbal_confusion"] = {f"{t}->{p}": v for (t, p), v in sorted(conf.items())}
     pathlib.Path("outputs/json").mkdir(parents=True, exist_ok=True)
     pathlib.Path("outputs/json/mdb_benchmark.json").write_text(json.dumps(res, indent=1))
+    print(f"\nsongs: {len(a.songs) if a.songs else 23}; ADT_STR cache: {a.adtstr_dir if a.adtstr else 'not used'}")
     names = list(res)
     print(f"\nF1 at +-50 ms on 23 real songs (MDB Drums full mixes). Reference counts in brackets.\n{'class':12s}" + "".join(f"{n:>10s}" for n in names))
     for k in (*COARSE, *FINE):

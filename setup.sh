@@ -24,6 +24,7 @@ else warn "third_party/ADTOF-pytorch missing: git clone https://github.com/xavri
 
 $PY -c "import demucs" 2>/dev/null && ok "demucs (optional, M2)" || warn "demucs not installed (optional): uv pip install demucs, then python scripts/download_models.py"
 [ -n "$(ls /usr/share/sounds/sf3/MuseScore_General*.sf3 /usr/share/sounds/sf2/TimGM6mb.sf2 2>/dev/null)" ] && ok "drum soundfont" || warn "no drum soundfont: sudo apt install musescore-general-soundfont-small (player falls back to a tonal render)"
+[ -f models/weights/labels.joblib ] && ok "learned ride/crash + open-hat labels" || warn "no label model (falls back to heuristics): $PY scripts/fetch_mdb.py && PYTHONPATH=. $PY scripts/train_labels.py  (~230 MB download, ~10 min)"
 command -v mscore3 >/dev/null && ok "MuseScore $(mscore3 --version 2>/dev/null | head -1)" || warn "mscore3 missing: sudo apt install musescore3"
 command -v ffmpeg >/dev/null && ok ffmpeg || fail "ffmpeg missing"
 

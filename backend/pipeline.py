@@ -14,7 +14,7 @@ from collections import Counter
 import librosa
 import numpy as np
 
-from backend.detection import adtof, articulation
+from backend.detection import adtof, articulation, labels
 from backend.engraving.musescore import render_pdf
 from backend.events import SCHEMA_VERSION
 from backend.exports import write_json, write_midi
@@ -102,9 +102,14 @@ def run(audio_path, out_dir="outputs", tempo_hint=None, beats_per_bar=4, offset=
     except Exception as exc:  # noqa: BLE001
         traceback.print_exc(file=sys.stderr)
         art_summary = {"error": f"{type(exc).__name__}: {exc}"[:200]}  # `events` is untouched: plain notation
-    del y
     tick("Working out tempo and bar lines", 0.72 if separate else 0.45)
     grid = estimate_grid(audio_path, duration, tempo_hint, beats_per_bar, offset, events=events)
+    try:  # learned ride/crash + open/closed hi-hat labels (replace the heuristics when the model is present)
+        learned = labels.apply(events, y, pred, 60.0 / grid.tempo_bpm)
+    except Exception as exc:  # noqa: BLE001 - optional, never fatal
+        traceback.print_exc(file=sys.stderr)
+        learned = {"error": f"{type(exc).__name__}: {exc}"[:200]}
+    del y
     calibrate_phase(events, grid)
     fit_bar_phase(events, grid, beat1)
     quantize(events, grid)
@@ -137,6 +142,7 @@ def run(audio_path, out_dir="outputs", tempo_hint=None, beats_per_bar=4, offset=
         "input": {"file": audio_path.name, "duration_s": round(duration, 3)},
         "detector": det_meta,
         "hihat": hat_info,
+        "learned_labels": learned,
         "groove_fill": fill_info,
         "separation": {"used": separate, "model": "htdemucs (weights terms unverified)" if separate else None,
                        "stem": str(stem_path) if stem_path else None},
