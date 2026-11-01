@@ -78,7 +78,7 @@ def test_start_validation(client, monkeypatch, rock):
     assert start(rights=False).status_code == 400
     assert start(rights=True, tempo=900).status_code == 422
     assert start(rights=True, kit="theremin").status_code == 422
-    assert start(rights=True, hat_detail="thirty-seconds").status_code == 422
+    assert start(rights=True, hat_detail="sixteenths").status_code == 422
     monkeypatch.setattr(jobs, "MAX_SEPARATE_MINUTES", 0.1)
     assert start(rights=True, separate=True).status_code == 422
 

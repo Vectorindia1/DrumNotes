@@ -11,3 +11,5 @@ outputs/
 third_party/
 audio file/
 data/jobs/
+data/benchmarks/
+outputs/

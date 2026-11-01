@@ -25,14 +25,8 @@ def summarise(report, params, title, duration):
     rhythm, arts, hat = report["rhythm"], report["articulations"], report.get("hihat", {})
     notes = []
     if hat.get("applied"):
-        if hat["mode"] == "auto" and hat["dropped_quiet_ticks"] > 20 and hat["bars_eighths_only"] > 0:
-            notes.append(f"Hi-hat: in {hat['bars_eighths_only']} bars the sixteenth notes between the eighths are much quieter than the eighths, "
-                         "so only the eighths are written. Choose \"All sixteenths\" under More options to include them.")
-        if hat["recovered_from_audio"] + hat["filled_from_pattern"] > 0:
-            notes.append(f"Hi-hat: {hat['recovered_from_audio'] + hat['filled_from_pattern']} hits the detector missed were added from the audio "
-                         f"and the repeating pattern, and {hat['dropped_no_energy'] + hat['dropped_quiet_ticks']} detections with no real sound behind them were removed.")
-    elif hat.get("reason"):
-        notes.append("Hi-hat line left as the detector found it: " + hat["reason"].split(" (")[0] + ".")
+        notes.append(f"Hi-hat simplified to eighths: {hat['dropped_quiet_ticks']} quieter in-between sixteenths were left out "
+                     "(they are still in the JSON).")
     if report["n_events"] < 20:
         notes.append("Very few drum hits were found. Is there drum audio in this file?")
     if rhythm.get("tempo_note"):

@@ -45,7 +45,7 @@ def _strength(env, t):
     return max(env.strength("hat", t + d) for d in (-0.008, 0.0, 0.008))
 
 
-def regularize_hats(events, grid, env, n_bars, mode="auto"):
+def regularize_hats(events, grid, env, n_bars, mode="auto", allow_additions=True):
     """Mutates `events` (marks dropped ones, returns new recovered ones). Returns (new_events, summary)."""
     spb = grid.slots_per_bar
     n = n_bars * spb
@@ -139,7 +139,7 @@ def regularize_hats(events, grid, env, n_bars, mode="auto"):
             e.articulation_features = {**(e.articulation_features or {}), "dropped": reason, "strength_over_floor": round(float(over[g]), 2)}
             dropped_weak += reason.startswith("quiet")
             dropped_noise += reason.startswith("no energy")
-    for g in sorted(keep - set(hats)):
+    for g in sorted(keep - set(hats)) if allow_additions else []:
         t = t_of[g]
         r = art_rise(env, t)
         if g in filled:  # shares its slot with another drum: no audio verification, the pattern says so

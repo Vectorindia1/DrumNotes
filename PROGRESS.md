@@ -76,6 +76,19 @@ User: on the 115-BPM song the hi-hats are mostly eighths but the PDF showed sixt
 ## Cymbal types and tambourine (2026-11-01)
 User: ride/crash/splash not told apart; hi-hat confused with tambourine/jingles/sleigh bells. Measured: the song's hi-hat hits form no second timbre group; cymbal hits split into ~30 tonal/darker (ride-like) vs ~62 noisy/bright (crash-like). ADTOF has no such classes. Existing work: ADT_STR (26 classes incl. all of these) is the best candidate; DrummerNet (classes, no weights); MDX23C DrumSep / LarsNet (ride/crash stems, non-commercial/unlicensed); drum-expander/drumie (ride vs crash by ring length, no tambourine). ADT_STR downloaded and reviewed; running it needs the user's permission (MODEL_REGISTRY). Next: run it on the song, then measure ADTOF vs ADT_STR per class on a small real labelled set (MDB Drums) before wiring it in.
 
+## REAL benchmark: MDB Drums, 23 hand-annotated songs (2026-11-01)
+`scripts/eval_mdb.py` (full mixes only, 231 MB of the 2 GB set, data/benchmarks/mdb, CC BY-NC-SA, evaluation only). F1 at +-50 ms:
+| class | detector (ADTOF) | pipeline |
+|---|---|---|
+| kick [1539] | 0.848 | 0.847 |
+| snare [2692, incl. 790 ghost] | 0.711 | 0.711 |
+| tom [90] | 0.345 | 0.340 |
+| hi-hat [2639] | 0.849 | 0.855 with the rebuild OFF (0.717 with it on) |
+| cymbal [1002] | 0.834 | 0.835 |
+Fine labels (pipeline heuristics): hat closed 0.645, hat open 0.433, ride 0.578, crash 0.251, china 0, splash 0, ghost 0.157, tambourine 0 (not supported). Cymbal type correct for 54 % of detected cymbals (379 of 751 rides called crash).
+**Consequences (measured, not assumed):** the hi-hat rebuild (rhythm/hats.py) lowered hi-hat F1 in every variant (0.821-0.842 vs 0.855; the quiet-16th rule deleted real hats, Disco 0.96 -> 0.58), so it is OFF by default and only "Simplify to eighths" (prune-only) uses it. Groove fill: kick recall 0.865 -> 0.886 (F1 +0.002), snare no gain -> kick only. Onset refinement helps hi-hat (0.849 -> 0.855). On the user's 115-BPM song the quiet in-between 16ths are real sounds, plausibly tambourine/shaker (user report) rather than hat: a classification problem.
+**ADT_STR:** executes (user granted permission) but its greedy decoder has no key/value cache: >12x slower than real time here (40+ min for a 3.4-min song). `backend/detection/adtstr.py` adds a cached decoder: 14x faster, but tokens are NOT identical to the original, because the original decoder's logits for a position change with sequence length (max diff 2.85), i.e. it does not behave as a strict causal decoder. Diagnosing that (PyTorch fast path?) was blocked by the permission classifier. Not wired into the pipeline; ADT_STR not yet benchmarked on MDB.
+
 ## Known limitations / failures found
 - **Unhinted tempo is weak:** 90→89.1, 100→99.4, 120→117.5 BPM (≈2 % off) and 140→69.8 (half-time). Half/double are listed as unresolved alternatives; M1 does not choose. Use `--tempo` until M3. (Synthetic input only.)
 - Meter fixed to N/4 (assumed); downbeat not detected (hint offset = beat 1; unhinted: bar 1 starts at first grid beat ≤ 0).

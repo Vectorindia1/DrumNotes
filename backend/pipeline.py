@@ -29,16 +29,25 @@ from backend.validation.musicxml import validate_musicxml
 from backend.validation.pdf import validate_pdf
 
 
-def fix_hihat_line(events, grid, env, n_bars, hat_detail):
-    """Rebuild the hi-hat line from audio energy when the hits are locked to a steady grid (see rhythm/hats.py).
-    Appends recovered hats to `events` in place. Never raises: the detector's own line is the fallback."""
+def grid_lock(events, grid):
+    """0..1: how tightly the kick/snare/hi-hat hits sit on the 16th grid (1 = exactly)."""
     errs = np.array([e.quantization_error_s for e in events if e.instrument in ("kick", "snare", "hihat") and e.grace_of is None])
     slot = 60.0 / grid.tempo_bpm / 4
-    lock = float(abs(np.exp(2j * np.pi * errs / slot).mean())) if len(errs) else 0.0
+    return float(abs(np.exp(2j * np.pi * errs / slot).mean())) if len(errs) else 0.0
+
+
+def fix_hihat_line(events, grid, env, n_bars, hat_detail):
+    """Optional simplification (hat_detail="eighths"): drop in-between 16th hats that are much quieter than the eighths.
+    Off by default: on the MDB Drums benchmark (23 real songs) every rebuild variant lowered hi-hat F1
+    (0.855 as detected vs 0.734-0.842; it deleted real quiet 16ths, e.g. Disco 0.96 -> 0.58), see PROGRESS.md.
+    Never adds hats. Never raises."""
+    if hat_detail != "eighths":
+        return {"applied": False, "reason": "hi-hat line as detected (default)"}
+    lock = grid_lock(events, grid)
     if lock < 0.5:
         return {"applied": False, "reason": f"hits are not locked to a steady grid (lock {lock:.2f}); hi-hat line left as detected"}
     try:
-        new, info = regularize_hats(events, grid, env, n_bars, hat_detail)
+        new, info = regularize_hats(events, grid, env, n_bars, "eighths", allow_additions=False)
     except Exception as exc:  # noqa: BLE001 - optional improvement, never fatal
         traceback.print_exc(file=sys.stderr)
         return {"applied": False, "reason": f"{type(exc).__name__}: {exc}"[:200]}
@@ -47,12 +56,14 @@ def fix_hihat_line(events, grid, env, n_bars, hat_detail):
 
 
 def fill_groove(events, grid, env, n_bars, lock):
-    """Fill kick/snare dropouts inside a repeating groove when the audio agrees (rhythm/fill.py). Never raises."""
+    """Fill KICK dropouts inside a repeating groove when the audio agrees (rhythm/fill.py). Never raises.
+    MDB Drums benchmark: kick recall 0.865 -> 0.886 (F1 0.845 -> 0.847); for snare it gave no gain and lower
+    precision, so snare is not filled."""
     if lock < 0.5:
         return {"applied": False}
     try:
         added = {}
-        for inst in ("kick", "snare"):
+        for inst in ("kick",):
             new = fill_dropouts(events, grid, env, n_bars, inst)
             events.extend(new)
             added[inst] = len(new)
@@ -99,7 +110,7 @@ def run(audio_path, out_dir="outputs", tempo_hint=None, beats_per_bar=4, offset=
     quantize(events, grid)
     n_bars = grid.n_bars(duration)
     hat_info = fix_hihat_line(events, grid, env, n_bars, hat_detail)
-    fill_info = fill_groove(events, grid, env, n_bars, hat_info.get("grid_lock", 0.0))
+    fill_info = fill_groove(events, grid, env, n_bars, grid_lock(events, grid))
     events = sorted(events, key=lambda e: (e.time_s, e.instrument))
     for i, e in enumerate(events):
         e.id = f"e{i:05d}"
@@ -174,7 +185,7 @@ if __name__ == "__main__":
     ap.add_argument("--out", default="outputs")
     ap.add_argument("--separate", action="store_true", help="detect on the Demucs drum stem (slow on CPU)")
     ap.add_argument("--kit", default="standard", help="drum kit for the score audio: standard, room, power, electronic, 808, jazz, brush")
-    ap.add_argument("--hats", default="auto", choices=("auto", "eighths", "sixteenths"), help="hi-hat detail: auto (by loudness), eighths only, or all sixteenths")
+    ap.add_argument("--hats", default="auto", choices=("auto", "eighths"), help="hi-hat: auto = as detected (default); eighths = simplify by dropping quiet in-between 16ths")
     ap.add_argument("--player", action="store_true", help="also build the blue-playhead score player")
     a = ap.parse_args()
     try:

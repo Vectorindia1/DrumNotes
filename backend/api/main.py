@@ -182,8 +182,8 @@ async def start(job_id: str, body: StartBody):
         raise HTTPException(422, "Tempo must be between 30 and 300 BPM.")
     if body.kit not in KITS:
         raise HTTPException(422, f"Unknown drum kit. Choose one of: {', '.join(sorted(KITS))}.")
-    if body.hat_detail not in ("auto", "eighths", "sixteenths"):
-        raise HTTPException(422, "Hi-hat detail must be auto, eighths or sixteenths.")
+    if body.hat_detail not in ("auto", "eighths"):
+        raise HTTPException(422, "Hi-hat detail must be auto or eighths.")
     if body.separate and job["duration_s"] > jobs.MAX_SEPARATE_MINUTES * 60:
         raise HTTPException(422, f"Drum separation is limited to {jobs.MAX_SEPARATE_MINUTES:.0f} minutes of audio. "
                                  "Turn it off or use a shorter file.")
