@@ -124,3 +124,8 @@ input[type=number], select {
 footer { max-width: 880px; margin: 0 auto; padding: 0 20px 40px; color: var(--muted); font-size: .85rem; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 @media (max-width: 520px) { .file { flex-wrap: wrap; } .actions:not(.wrap) { flex-wrap: wrap; } #player { min-height: 480px; } }
+
+.tempo-alts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 14px; color: var(--muted); font-size: .92rem; }
+.tempo-alts > span:last-child { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.pill { font: inherit; font-size: .9rem; padding: 3px 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.pill:hover { border-color: var(--accent); color: var(--accent); }

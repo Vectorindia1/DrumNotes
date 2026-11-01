@@ -64,6 +64,12 @@ try {
     const frameOk = await ev(`new Promise(r => { const f = document.querySelector('#player'); const t = setInterval(() => { try { const d = f.contentDocument; if (d && d.querySelector('.page img') && d.getElementById('bar').textContent) { clearInterval(t); r(d.getElementById('bar').textContent + ' | ' + d.getElementById('source').options.length + ' sources'); } } catch (e) {} }, 300); setTimeout(() => r(false), 15000); })`);
     check("embedded player loaded its score and audio sources", !!frameOk, String(frameOk));
     await shot("4-result");
+    const alts = await ev(`[...document.querySelectorAll('#tempo-alt-btns .pill')].map(b => b.textContent)`);
+    check("alternative tempos are offered", alts.length > 0 && await ev(`!document.querySelector('#tempo-alts').hidden`), JSON.stringify(alts));
+    await ev(`document.querySelector('#tempo-alt-btns .pill').click()`);
+    await until(`!document.querySelector('#view-progress').hidden`, "progress after choosing another tempo");
+    await until(`!document.querySelector('#view-result').hidden`, "result after re-creating with another tempo");
+    check("score re-created at the chosen tempo", await ev(`[...document.querySelectorAll('#chips li')].some(l => l.textContent.includes(${JSON.stringify(alts[0])}))`), alts[0]);
     await send("Page.navigate", { url: base + "/" }); await sleep(1200);
     check("finished score is listed under 'Your scores'", await ev(`!document.querySelector('#recent').hidden && document.querySelectorAll('#recent-list li').length >= 1`));
     await shot("5-home-with-recent");

@@ -56,7 +56,7 @@ def run(audio_path, out_dir="outputs", tempo_hint=None, beats_per_bar=4, offset=
         art_summary = {"error": f"{type(exc).__name__}: {exc}"[:200]}  # `events` is untouched: plain notation
     del y
     tick("Working out tempo and bar lines", 0.72 if separate else 0.45)
-    grid = estimate_grid(audio_path, duration, tempo_hint, beats_per_bar, offset)
+    grid = estimate_grid(audio_path, duration, tempo_hint, beats_per_bar, offset, events=events)
     calibrate_phase(events, grid)
     fit_bar_phase(events, grid, beat1)
     quantize(events, grid)

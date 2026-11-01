@@ -46,6 +46,13 @@ upload size/time limits) and keep the limits above low. The drum-detection model
 different model (see `LICENSE_AUDIT.md`). Demucs weights' licence is unverified. No Dockerfile is provided
 (Docker was not available to test it).
 
+## Tempo
+
+With no tempo entered, the tempo is worked out from the drum pattern (all instruments, bar-level repetition), not from
+the loudest pulse in the mix. The result page lists the usual mix-ups (x 3/4, 4/3, 1/2, 2) as buttons: click one to
+re-create the score. If you type a tempo that is slightly off from what the drums lock to (within 3 %), the tempo
+the audio supports is used and the page tells you. Assumes 4/4 and a steady tempo.
+
 ## If something goes wrong
 
 - The page shows a short message. For the technical reason, restart with `DRUMSCRIBE_DEBUG=1 ./serve.sh`: failed

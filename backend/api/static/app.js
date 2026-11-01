@@ -164,6 +164,12 @@
       chip([[`${total}`, true], " drum hits"]), chip([[fmtDur(s.duration_s), true], " long"])];
     Object.entries(s.articulations).forEach(([k, v]) => chips.push(chip([[`${v}`, true], ` ${ART_NAMES[k] || k}`], true)));
     $("#chips").replaceChildren(...chips);
+    const alts = (s.tempo_alternatives || []).filter((t) => Math.abs(t - s.tempo_bpm) > 1);
+    $("#tempo-alts").hidden = alts.length === 0;
+    $("#tempo-alt-btns").replaceChildren(...alts.map((t) => {
+      const b = document.createElement("button"); b.type = "button"; b.className = "pill"; b.textContent = `${t} BPM`;
+      b.addEventListener("click", () => recreate(t)); return b;
+    }));
     $("#dl-pdf").href = base + r.files.pdf + "?download=true"; $("#dl-xml").href = base + r.files.musicxml + "?download=true";
     $("#dl-mid").href = base + r.files.midi + "?download=true"; $("#dl-json").href = base + r.files.json + "?download=true";
     $("#open-player").href = base + r.files.player;
@@ -172,6 +178,14 @@
     $("#r-keep").textContent = `Kept for ${j.limits.retention_hours} hours, then deleted.`;
     store.add({ id: j.id, title: s.title });
     show("result"); say("Your score is ready");
+  }
+  async function recreate(tempo) {  // same upload and options, different tempo
+    const p = job.params || {};
+    try {
+      job = await api(`/api/jobs/${job.id}/start`, { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rights: true, tempo, separate: !!p.separate, kit: p.kit || "standard" }) });
+      route();
+    } catch (e) { say(e.message); }
   }
   $("#r-again").addEventListener("click", () => { if (job) renderSetup(job); });
   $("#r-delete").addEventListener("click", async () => {

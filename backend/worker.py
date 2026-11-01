@@ -26,9 +26,11 @@ def summarise(report, params, title, duration):
     notes = []
     if report["n_events"] < 20:
         notes.append("Very few drum hits were found. Is there drum audio in this file?")
-    if not params.get("tempo"):
-        notes.append(f"The tempo was detected automatically ({rhythm['tempo_bpm']:.0f} BPM). If the score feels twice or "
-                     "half as fast as the song, enter the tempo under Advanced and create it again.")
+    if rhythm.get("tempo_note"):
+        notes.append(rhythm["tempo_note"])
+    elif not params.get("tempo"):
+        notes.append(f"The tempo ({rhythm['tempo_bpm']:.1f} BPM) was worked out from the drum pattern. If the score feels too fast "
+                     "or too slow, try one of the other tempos above.")
     if "LOW CONFIDENCE" in rhythm["downbeat"]:
         notes.append("Where each bar starts is a best guess, so the bar lines may be shifted. The notes themselves are unaffected.")
     if "error" in arts:
@@ -37,7 +39,7 @@ def summarise(report, params, title, duration):
         notes.append("Ghost notes, open hi-hats and cymbal types are estimates. Flams are not detected yet. Check the score by ear.")
     return {
         "title": title, "duration_s": round(duration, 1), "tempo_bpm": round(rhythm["tempo_bpm"], 1),
-        "tempo_detected": not params.get("tempo"), "bars": report["n_bars"], "hits": report["counts"],
+        "tempo_detected": not params.get("tempo"), "tempo_alternatives": rhythm.get("alternatives_unresolved", [])[:6], "bars": report["n_bars"], "hits": report["counts"],
         "articulations": {ART_LABELS[k]: v for k, v in arts.items() if k in ART_LABELS and v},
         "notes": notes, "validation_ok": report["ok"],
     }

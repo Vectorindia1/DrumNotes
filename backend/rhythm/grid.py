@@ -13,6 +13,8 @@ from dataclasses import dataclass
 import librosa
 import numpy as np
 
+from backend.rhythm.tempo import estimate_tempo, snap_hint
+
 SLOTS_PER_BEAT = 4
 
 
@@ -30,6 +32,8 @@ class Grid:
     beat_shift: int = 0  # whole beats prepended so that bar boundaries fall on the guessed downbeat
     phase_note: str = ""
     phase_shift_s: float = 0.0  # grid shifted by this to line up with the measured attacks
+    tempo_basis: str = ""
+    tempo_note: str | None = None  # e.g. a typed tempo that was corrected to what the drums lock to
 
     @property
     def slots_per_bar(self):
@@ -56,6 +60,8 @@ class Grid:
         return {
             "method": self.method,
             "tempo_bpm": round(self.tempo_bpm, 2),
+            "tempo_basis": self.tempo_basis,
+            "tempo_note": self.tempo_note,
             "alternatives_unresolved": [round(a, 2) for a in self.tempo_alternatives],
             "meter": f"{self.beats_per_bar}/4 (assumed, not detected)",
             "phase_calibration_ms": round(self.phase_shift_s * 1000, 1),
@@ -76,12 +82,26 @@ def _extend(beats, period, duration, beats_per_bar, anchor_is_downbeat=True):
     return np.array(beats)
 
 
-def estimate_grid(audio_path, duration, tempo_hint=None, beats_per_bar=4, offset=None):
+def estimate_grid(audio_path, duration, tempo_hint=None, beats_per_bar=4, offset=None, events=None):
+    """With `events` (the detected hits) the tempo comes from the drum pattern, not the loudest pulse of the mix,
+    and a typed tempo is checked against the hits (see tempo.py)."""
+    tempo_note = tempo_basis = drum_alts = None
+    if events:
+        if tempo_hint and offset is None:
+            tempo_hint, tempo_note = snap_hint(events, tempo_hint)
+            tempo_basis = "tempo entered by the user" if tempo_note is None else "tempo entered, corrected to the hits"
+        elif not tempo_hint:
+            found = estimate_tempo(events, duration)
+            if found:
+                tempo_hint, info = found
+                tempo_basis = f"drum pattern (grid lock {info['grid_coherence']:.2f})"
+                drum_alts = info["alternatives"]
     if tempo_hint and offset is not None:
         period = 60.0 / tempo_hint
         grid = Grid(_extend([offset], period, duration, beats_per_bar), beats_per_bar, "hint", float(tempo_hint), [])
         grid.phase_note = "hint offset taken as beat 1"
         grid.tempo_alternatives = [tempo_hint / 2, tempo_hint * 2]
+        grid.tempo_basis = "tempo and offset entered by the user (exact grid)"
         return grid
     y, sr = librosa.load(audio_path, sr=22050, mono=True)
     kwargs = {"bpm": float(tempo_hint)} if tempo_hint else {}
@@ -92,7 +112,15 @@ def estimate_grid(audio_path, duration, tempo_hint=None, beats_per_bar=4, offset
     period = 60.0 / tempo_hint if tempo_hint else float(np.median(np.diff(times)))
     bpm = 60.0 / period
     method = "librosa.beat_track(bpm=hint)" if tempo_hint else "librosa.beat_track"
-    return Grid(_extend(list(times), period, duration, beats_per_bar, False), beats_per_bar, method, bpm, [bpm / 2, bpm * 2])
+    alts = [bpm / 2, bpm * 2]
+    if drum_alts is not None:  # tempo came from the drums: offer the usual ratio confusions + the beat tracker's own opinion
+        alts = list(drum_alts)
+        tracked = float(np.atleast_1d(librosa.feature.tempo(y=y, sr=sr))[0])
+        if abs(tracked - bpm) / bpm > 0.03 and all(abs(tracked - a) / a > 0.03 for a in alts):
+            alts = sorted([*alts, round(tracked, 1)])
+    grid = Grid(_extend(list(times), period, duration, beats_per_bar, False), beats_per_bar, method, bpm, alts)
+    grid.tempo_basis, grid.tempo_note = tempo_basis or "beat tracker on the mix", tempo_note
+    return grid
 
 
 def calibrate_phase(events, grid, instruments=("kick", "snare", "hihat")):
