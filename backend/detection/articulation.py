@@ -235,10 +235,10 @@ def classify_cymbals(events, env, y):
             e.articulation = "china"
 
 
-def annotate(events, y, pred=None, pick=None):
+def annotate(events, y, pred=None, pick=None, env=None):
     """Mutates events (labels + features); returns (events incl. added graces/ghost candidates,
     summary). pred/pick enable the low-threshold evidence for flams and extra ghost notes."""
-    env = Env(band_power(y))
+    env = env or Env(band_power(y))
     snares = _sorted(events, "snare")
     low = pick(pred, [2.0, FLAM_PICK_ACTIVATION, 2.0, 2.0, 2.0])[38] if pred is not None and pick else []
     pairs = find_flams(snares, env, low, pred)

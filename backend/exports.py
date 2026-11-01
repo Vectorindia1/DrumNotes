@@ -14,7 +14,7 @@ def write_midi(events, path, tempo):
     real dynamics model yet)."""
     midi = pretty_midi.PrettyMIDI(initial_tempo=float(tempo))
     drums = pretty_midi.Instrument(program=0, is_drum=True, name="Drum Set")
-    for e in events:
+    for e in (e for e in events if e.notated):  # hits dropped as inaudible ticks are not in the score or the MIDI
         vel = 60 if e.articulation == "grace" else 45 if e.articulation == "ghost" else 100
         pitch = 38 if e.articulation == "grace" else GM_PITCH[note_key(e)]
         drums.notes.append(pretty_midi.Note(vel, pitch, e.time_s, e.time_s + 0.1))

@@ -89,7 +89,7 @@
     $("#f-title").textContent = j.title;
     $("#f-meta").textContent = `${fmtDur(j.duration_s)} · ${j.size_mb} MB`;
     const p = j.params || {};
-    $("#tempo").value = p.tempo || ""; $("#kit").value = p.kit || "standard"; $("#separate").checked = !!p.separate;
+    $("#tempo").value = p.tempo || ""; $("#kit").value = p.kit || "standard"; $("#hats").value = p.hat_detail || "auto"; $("#separate").checked = !!p.separate;
     $("#rights").checked = false; $("#create").disabled = true; showError($("#setup-error"), "");
     const tooLong = j.duration_s > j.limits.max_separate_minutes * 60;
     $("#separate").disabled = tooLong;
@@ -110,7 +110,7 @@
     try {
       job = await api(`/api/jobs/${job.id}/start`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rights: $("#rights").checked, tempo: t ? parseFloat(t) : null, separate: $("#separate").checked, kit: $("#kit").value }),
+        body: JSON.stringify({ rights: $("#rights").checked, tempo: t ? parseFloat(t) : null, separate: $("#separate").checked, kit: $("#kit").value, hat_detail: $("#hats").value }),
       });
       route();
     } catch (e) { showError($("#setup-error"), e.message); $("#create").disabled = !$("#rights").checked; }
@@ -183,7 +183,7 @@
     const p = job.params || {};
     try {
       job = await api(`/api/jobs/${job.id}/start`, { method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rights: true, tempo, separate: !!p.separate, kit: p.kit || "standard" }) });
+        body: JSON.stringify({ rights: true, tempo, separate: !!p.separate, kit: p.kit || "standard", hat_detail: p.hat_detail || "auto" }) });
       route();
     } catch (e) { say(e.message); }
   }

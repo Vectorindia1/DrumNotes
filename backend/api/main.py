@@ -168,6 +168,7 @@ class StartBody(BaseModel):
     tempo: float | None = None
     separate: bool = False
     kit: str = "standard"
+    hat_detail: str = "auto"
 
 
 @app.post("/api/jobs/{job_id}/start")
@@ -181,6 +182,8 @@ async def start(job_id: str, body: StartBody):
         raise HTTPException(422, "Tempo must be between 30 and 300 BPM.")
     if body.kit not in KITS:
         raise HTTPException(422, f"Unknown drum kit. Choose one of: {', '.join(sorted(KITS))}.")
+    if body.hat_detail not in ("auto", "eighths", "sixteenths"):
+        raise HTTPException(422, "Hi-hat detail must be auto, eighths or sixteenths.")
     if body.separate and job["duration_s"] > jobs.MAX_SEPARATE_MINUTES * 60:
         raise HTTPException(422, f"Drum separation is limited to {jobs.MAX_SEPARATE_MINUTES:.0f} minutes of audio. "
                                  "Turn it off or use a shorter file.")
@@ -190,7 +193,7 @@ async def start(job_id: str, body: StartBody):
     shutil.rmtree(d / "out", ignore_errors=True)
     shutil.rmtree(d / "stems", ignore_errors=True)
     updated = jobs.update(job_id, state="queued", stage="Waiting in line", progress=0.0, error=None, result=None,
-                          params={"tempo": body.tempo, "separate": body.separate, "kit": body.kit})
+                          params={"tempo": body.tempo, "separate": body.separate, "kit": body.kit, "hat_detail": body.hat_detail})
     runner.submit(job_id)
     return _public(updated)
 

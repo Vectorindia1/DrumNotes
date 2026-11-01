@@ -22,8 +22,17 @@ def emit(kind, **payload):
 
 
 def summarise(report, params, title, duration):
-    rhythm, arts = report["rhythm"], report["articulations"]
+    rhythm, arts, hat = report["rhythm"], report["articulations"], report.get("hihat", {})
     notes = []
+    if hat.get("applied"):
+        if hat["mode"] == "auto" and hat["dropped_quiet_ticks"] > 20 and hat["bars_eighths_only"] > 0:
+            notes.append(f"Hi-hat: in {hat['bars_eighths_only']} bars the sixteenth notes between the eighths are much quieter than the eighths, "
+                         "so only the eighths are written. Choose \"All sixteenths\" under More options to include them.")
+        if hat["recovered_from_audio"] + hat["filled_from_pattern"] > 0:
+            notes.append(f"Hi-hat: {hat['recovered_from_audio'] + hat['filled_from_pattern']} hits the detector missed were added from the audio "
+                         f"and the repeating pattern, and {hat['dropped_no_energy'] + hat['dropped_quiet_ticks']} detections with no real sound behind them were removed.")
+    elif hat.get("reason"):
+        notes.append("Hi-hat line left as the detector found it: " + hat["reason"].split(" (")[0] + ".")
     if report["n_events"] < 20:
         notes.append("Very few drum hits were found. Is there drum audio in this file?")
     if rhythm.get("tempo_note"):
@@ -62,7 +71,7 @@ def main(job_dir):
     audio = next(job_dir.glob("audio.*"))
     try:
         files, report, _ = run(audio, out, tempo_hint=p.get("tempo"), separate=p.get("separate", False), player=True,
-                               kit=p.get("kit", "standard"), title=job["title"], stem_dir=job_dir / "stems",
+                               kit=p.get("kit", "standard"), hat_detail=p.get("hat_detail", "auto"), title=job["title"], stem_dir=job_dir / "stems",
                                progress=lambda stage, frac: emit("PROGRESS", stage=stage, frac=frac))
         if not report["ok"]:
             raise RuntimeError("; ".join(report["validation"]["musicxml_problems"] + report["validation"]["pdf_problems"]))

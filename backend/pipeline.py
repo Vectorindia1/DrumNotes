@@ -12,6 +12,7 @@ import traceback
 from collections import Counter
 
 import librosa
+import numpy as np
 
 from backend.detection import adtof, articulation
 from backend.engraving.musescore import render_pdf
@@ -20,14 +21,49 @@ from backend.exports import write_json, write_midi
 from backend.intake import UnsupportedSource, resolve_input
 from backend.notation.drum_musicxml import bars_to_musicxml
 from backend.reconstruction.bars import build_bars
+from backend.rhythm.fill import fill_dropouts
 from backend.rhythm.grid import calibrate_phase, estimate_grid, fit_bar_phase, quantize
+from backend.rhythm.hats import regularize_hats
 from backend.separation.demucs_sep import separate_drums
 from backend.validation.musicxml import validate_musicxml
 from backend.validation.pdf import validate_pdf
 
 
+def fix_hihat_line(events, grid, env, n_bars, hat_detail):
+    """Rebuild the hi-hat line from audio energy when the hits are locked to a steady grid (see rhythm/hats.py).
+    Appends recovered hats to `events` in place. Never raises: the detector's own line is the fallback."""
+    errs = np.array([e.quantization_error_s for e in events if e.instrument in ("kick", "snare", "hihat") and e.grace_of is None])
+    slot = 60.0 / grid.tempo_bpm / 4
+    lock = float(abs(np.exp(2j * np.pi * errs / slot).mean())) if len(errs) else 0.0
+    if lock < 0.5:
+        return {"applied": False, "reason": f"hits are not locked to a steady grid (lock {lock:.2f}); hi-hat line left as detected"}
+    try:
+        new, info = regularize_hats(events, grid, env, n_bars, hat_detail)
+    except Exception as exc:  # noqa: BLE001 - optional improvement, never fatal
+        traceback.print_exc(file=sys.stderr)
+        return {"applied": False, "reason": f"{type(exc).__name__}: {exc}"[:200]}
+    events.extend(new)
+    return {"applied": "skipped" not in info, "grid_lock": round(lock, 2), **info}
+
+
+def fill_groove(events, grid, env, n_bars, lock):
+    """Fill kick/snare dropouts inside a repeating groove when the audio agrees (rhythm/fill.py). Never raises."""
+    if lock < 0.5:
+        return {"applied": False}
+    try:
+        added = {}
+        for inst in ("kick", "snare"):
+            new = fill_dropouts(events, grid, env, n_bars, inst)
+            events.extend(new)
+            added[inst] = len(new)
+        return {"applied": True, **added}
+    except Exception as exc:  # noqa: BLE001 - optional improvement, never fatal
+        traceback.print_exc(file=sys.stderr)
+        return {"applied": False, "reason": f"{type(exc).__name__}: {exc}"[:200]}
+
+
 def run(audio_path, out_dir="outputs", tempo_hint=None, beats_per_bar=4, offset=None, title=None, beat1=None,
-        separate=False, player=False, kit="standard", progress=None, stem_dir="data/stems"):
+        separate=False, player=False, kit="standard", progress=None, stem_dir="data/stems", hat_detail="auto"):
     """progress(stage, fraction) is called as each stage starts (used by the web worker)."""
     def tick(stage, frac):
         if progress:
@@ -49,8 +85,9 @@ def run(audio_path, out_dir="outputs", tempo_hint=None, beats_per_bar=4, offset=
     events, det_meta, pred = adtof.detect(detect_path, return_activations=True)
     tick("Telling ghost notes, open hi-hats and cymbals apart", 0.65 if separate else 0.30)
     y, _ = librosa.load(str(detect_path), sr=articulation.SR, mono=True)
+    env = articulation.Env(articulation.band_power(y))
     try:  # optional extras (ghost/open/cymbal labels, refined times): a failure must not cost the score
-        events, art_summary = articulation.annotate(copy.deepcopy(events), y, pred, adtof.pick)
+        events, art_summary = articulation.annotate(copy.deepcopy(events), y, pred, adtof.pick, env=env)
     except Exception as exc:  # noqa: BLE001
         traceback.print_exc(file=sys.stderr)
         art_summary = {"error": f"{type(exc).__name__}: {exc}"[:200]}  # `events` is untouched: plain notation
@@ -61,6 +98,11 @@ def run(audio_path, out_dir="outputs", tempo_hint=None, beats_per_bar=4, offset=
     fit_bar_phase(events, grid, beat1)
     quantize(events, grid)
     n_bars = grid.n_bars(duration)
+    hat_info = fix_hihat_line(events, grid, env, n_bars, hat_detail)
+    fill_info = fill_groove(events, grid, env, n_bars, hat_info.get("grid_lock", 0.0))
+    events = sorted(events, key=lambda e: (e.time_s, e.instrument))
+    for i, e in enumerate(events):
+        e.id = f"e{i:05d}"
     bars, collisions = build_bars(events, n_bars, grid.slots_per_bar)
 
     paths = {
@@ -83,6 +125,8 @@ def run(audio_path, out_dir="outputs", tempo_hint=None, beats_per_bar=4, offset=
         "schema_version": SCHEMA_VERSION,
         "input": {"file": audio_path.name, "duration_s": round(duration, 3)},
         "detector": det_meta,
+        "hihat": hat_info,
+        "groove_fill": fill_info,
         "separation": {"used": separate, "model": "htdemucs (weights terms unverified)" if separate else None,
                        "stem": str(stem_path) if stem_path else None},
         "rhythm": grid.describe(),
@@ -130,11 +174,12 @@ if __name__ == "__main__":
     ap.add_argument("--out", default="outputs")
     ap.add_argument("--separate", action="store_true", help="detect on the Demucs drum stem (slow on CPU)")
     ap.add_argument("--kit", default="standard", help="drum kit for the score audio: standard, room, power, electronic, 808, jazz, brush")
+    ap.add_argument("--hats", default="auto", choices=("auto", "eighths", "sixteenths"), help="hi-hat detail: auto (by loudness), eighths only, or all sixteenths")
     ap.add_argument("--player", action="store_true", help="also build the blue-playhead score player")
     a = ap.parse_args()
     try:
         a.audio = str(resolve_input(a.audio))
     except UnsupportedSource as e:
         raise SystemExit(f"error: {e}") from None
-    files, rep, _ = run(a.audio, a.out, a.tempo, a.beats_per_bar, a.offset, beat1=a.beat1, separate=a.separate, player=a.player, kit=a.kit)
+    files, rep, _ = run(a.audio, a.out, a.tempo, a.beats_per_bar, a.offset, beat1=a.beat1, separate=a.separate, player=a.player, kit=a.kit, hat_detail=a.hats)
     print(json.dumps({"files": files, "report": rep}, indent=1))

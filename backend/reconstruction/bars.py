@@ -20,7 +20,7 @@ def build_bars(events, n_bars, slots_per_bar):
     Different keys in one slot are kept (simultaneous hits). A duplicate key in a slot keeps the
     higher-confidence event; the others get notated=False (still in the JSON). Flam grace notes
     are not placed on the grid: they are drawn from their main event's key."""
-    events = [e for e in events if e.grace_of is None]
+    events = [e for e in events if e.grace_of is None and e.notated]  # notated=False: dropped by an evidence check
     n_bars = max(n_bars, max((e.bar for e in events), default=0) + 1)
     bars = [[set() for _ in range(slots_per_bar)] for _ in range(n_bars)]
     best, collisions = {}, 0

@@ -28,6 +28,9 @@ def test_synthetic_rock_end_to_end(tmp_path):
         assert score(got, truth[inst])["by_tolerance_ms"][50]["f1"] >= 0.95
     # sample-0 regression: the first kick is at t=0 and must be retained with its raw time
     assert min(e.time_s for e in events if e.instrument == "kick") < 0.02
+    # a plain eighth-note hi-hat song must stay eighth notes (the reconstruction must not invent sixteenths)
+    hats = [e for e in events if e.instrument == "hihat" and e.notated]
+    assert 50 <= len(hats) <= 72 and not any(e.slot % 2 for e in hats), (len(hats), sorted({e.slot for e in hats}))
     for f in files.values():
         assert shutil.os.path.getsize(f) > 0
 
