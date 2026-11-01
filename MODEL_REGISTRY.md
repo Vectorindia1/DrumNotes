@@ -40,3 +40,10 @@ Production approval (PRD §5.3): none granted.
 | MuseScore_General_Lite.sf3 (drum kits, bank 128) | Debian `musescore-general-soundfont-small` -> /usr/share/sounds/sf3 | MIT (per package copyright file) | used for score audio, EXPERIMENTAL |
 | TimGM6mb.sf2 | Debian `timgm6mb-soundfont` | GPL-2 | fallback only |
 | pyfluidsynth 1.4.0 (+ system libfluidsynth.so.3) | PyPI | LGPL-2.1 | used, dev dependency |
+
+## ADT_STR (candidate, 2026-11-01) - DOWNLOADED, NOT EXECUTED
+- huggingface.co/Pierfrancesco/adt-str (paper arXiv 2601.09520, code github.com/pier-maker92/ADT_STR). Seq2seq transformer, 69 M params, 24 kHz, 2.56 s chunks, 10 ms resolution, trained on synthetic audio rendered from MIDI; reports state of the art on ENST and MDB test sets (third-party claim, not reproduced).
+- 26 classes incl. closed/pedal/open hi-hat, crash, ride (+bell), china, splash, tambourine, shaker, cowbell, triangle, floor/mid/high tom, side stick, clap: exactly the distinctions ADTOF cannot make (ADTOF merges tambourine into hi-hat and all cymbals into one class).
+- Licence: CC BY-SA 4.0 per the GitHub README; the HF model card states none -> UNVERIFIED.
+- Downloaded: code + setting-tau-0.8 only, third_party/adt-str (git-ignored), model.safetensors sha256 f94d1773d929166e0a3f63d305975aa6667512f8a71d7706872e1f8b23ca930b (289 MB). Code read; scan found no shell/network/eval calls (one torch.load fallback, unused with safetensors). Deps added: transformers 5.22.1, omegaconf.
+- Running it was blocked by the auto-mode permission classifier (external code). `scripts/try_adtstr.py AUDIO` runs it for evaluation once the user allows/runs it.

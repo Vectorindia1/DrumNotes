@@ -20,8 +20,8 @@ import torch
 
 ROOT = pathlib.Path(__file__).resolve().parents[1] / "third_party" / "adt-str"
 sys.path.insert(0, str(ROOT))
-from adt_transcriber import ADTTranscriber  # noqa: E402
-from utils.mapping_utils import MappingUtils  # noqa: E402
+from adt_transcriber import ADTTranscriber
+from utils.mapping_utils import MappingUtils
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
