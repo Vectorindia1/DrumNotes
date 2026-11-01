@@ -46,6 +46,14 @@ upload size/time limits) and keep the limits above low. The drum-detection model
 different model (see `LICENSE_AUDIT.md`). Demucs weights' licence is unverified. No Dockerfile is provided
 (Docker was not available to test it).
 
+## If something goes wrong
+
+- The page shows a short message. For the technical reason, restart with `DRUMSCRIBE_DEBUG=1 ./serve.sh`: failed
+  scores then show the underlying error. The full log of every score is in `data/jobs/<id>/worker.log`.
+- "That file looks incomplete or damaged": the upload was shorter than the audio inside it claims (typical for a file
+  that is still downloading or syncing). Check the file's size on disk, copy it again, and re-upload.
+- After updating the code, restart `./serve.sh` (the analysis picks up changes by itself, the web server does not).
+
 ## Tests
 
 ```bash

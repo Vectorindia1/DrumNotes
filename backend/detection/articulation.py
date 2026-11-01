@@ -172,11 +172,14 @@ def classify_hats(events, env):
             continue
         feats = {"room_to_next_ms": round(room * 1000)}
         if room >= OPEN_MIN_WINDOW_S:
-            tails = [env.win("hat", e.time_s + a, e.time_s + a + 0.03) for a in (0.08, 0.11, 0.14)]
-            ratio = min(float(t.mean()) for t in tails if len(t)) / float(peak.max())
-            feats["tail_ratio"] = round(ratio, 3)
-            if ratio >= OPEN_TAIL_RATIO:
-                e.articulation, e.articulation_confidence = "open", round(min(ratio / (3 * OPEN_TAIL_RATIO), 1.0), 2)
+            tails = [t for t in (env.win("hat", e.time_s + a, e.time_s + a + 0.03) for a in (0.08, 0.11, 0.14)) if len(t)]
+            if not tails:  # the recording ends right after this hit: nothing to measure, leave it closed
+                feats["tail_ratio"] = None
+            else:
+                ratio = min(float(t.mean()) for t in tails) / float(peak.max())
+                feats["tail_ratio"] = round(ratio, 3)
+                if ratio >= OPEN_TAIL_RATIO:
+                    e.articulation, e.articulation_confidence = "open", round(min(ratio / (3 * OPEN_TAIL_RATIO), 1.0), 2)
         e.articulation_features = feats
 
 

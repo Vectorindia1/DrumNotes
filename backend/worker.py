@@ -31,7 +31,10 @@ def summarise(report, params, title, duration):
                      "half as fast as the song, enter the tempo under Advanced and create it again.")
     if "LOW CONFIDENCE" in rhythm["downbeat"]:
         notes.append("Where each bar starts is a best guess, so the bar lines may be shifted. The notes themselves are unaffected.")
-    notes.append("Ghost notes, open hi-hats and cymbal types are estimates. Flams are not detected yet. Check the score by ear.")
+    if "error" in arts:
+        notes.append("Ghost notes, open hi-hats and cymbal types could not be analysed for this file, so the score shows plain notes.")
+    else:
+        notes.append("Ghost notes, open hi-hats and cymbal types are estimates. Flams are not detected yet. Check the score by ear.")
     return {
         "title": title, "duration_s": round(duration, 1), "tempo_bpm": round(rhythm["tempo_bpm"], 1),
         "tempo_detected": not params.get("tempo"), "bars": report["n_bars"], "hits": report["counts"],

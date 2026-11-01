@@ -134,6 +134,7 @@
       ? (j.queue_position > 1 ? `${j.queue_position - 1} other score${j.queue_position > 2 ? "s are" : " is"} ahead of yours.` : "You're next.")
       : `${j.title} · usually ${fmtMin(sep ? j.estimate.separated : j.estimate.standard)}.`;
     showError($("#p-error"), failed ? j.error || "Something went wrong." : "");
+    if (failed && j.detail) $("#p-error").textContent += ` (${j.detail})`;  // only present when the operator set DRUMSCRIBE_DEBUG=1
     $("#p-retry").hidden = !failed; $("#p-cancel").textContent = failed ? "Delete" : "Cancel";
     $("#p-hint").hidden = failed;
     $("#steps").hidden = failed;

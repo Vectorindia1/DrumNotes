@@ -4,6 +4,7 @@ Flow: POST /api/upload (raw file body) -> POST /api/jobs/{id}/start -> poll GET 
       -> GET /files/{id}/... (PDF, MusicXML, MIDI, JSON, the player). DELETE /api/jobs/{id} removes everything.
 No accounts: a job is reachable only through its unguessable id.
 """
+import os
 import pathlib
 import re
 import shutil
@@ -65,6 +66,8 @@ def _public(job):
     keys = ("id", "title", "filename", "state", "stage", "progress", "error", "duration_s", "size_mb", "estimate",
             "params", "result", "created", "started")
     out = {k: job.get(k) for k in keys}
+    if os.environ.get("DRUMSCRIBE_DEBUG") == "1":
+        out["detail"] = job.get("detail")
     out["queue_position"] = runner.position(job["id"]) if runner else 0
     out["limits"] = {"max_minutes": jobs.MAX_MINUTES, "max_separate_minutes": jobs.MAX_SEPARATE_MINUTES,
                      "retention_hours": jobs.RETENTION_H}
@@ -77,17 +80,35 @@ def _title_from(filename):
     return re.sub(r"\s+", " ", stem).strip()[:80] or "Untitled"
 
 
+def _mmss(s):
+    return f"{int(s // 60)}:{int(s % 60):02d}"
+
+
+def _decoded_seconds(path):
+    """(seconds the header claims, seconds that actually decode). A truncated mp3 keeps a header that
+    describes the whole song, so only decoding tells the truth."""
+    with sf.SoundFile(str(path)) as f:
+        n = 0
+        while len(block := f.read(1 << 16, dtype="float32", always_2d=True)):  # same decoder the analysis uses
+            n += len(block)
+        return f.frames / f.samplerate, n / f.samplerate
+
+
 def _inspect(d, raw, filename):
     """Decode check + canonical file name. Returns (duration_s, audio_path). Raises ValueError (user-facing)."""
     try:
         ready = readable(raw, dest_dir=d)
         info = sf.info(str(ready))
+        claimed, duration = _decoded_seconds(ready)
     except (UnsupportedSource, sf.LibsndfileError, RuntimeError):
         raise ValueError("We couldn't read that file as audio. Try an mp3, wav, flac, m4a, ogg or opus file.") from None
+    if claimed > duration + max(2.0, 0.05 * claimed):
+        raise ValueError(f"That file looks incomplete or damaged: it says it is {_mmss(claimed)} long but only {_mmss(duration)} of "
+                         "audio could be read. If you copied or downloaded it, make sure that finished, then upload it again.")
     ext = FORMAT_EXT.get(info.format, ".audio") if ready == raw else ".wav"  # libsndfile and ffmpeg sniff content, not names
     audio = d / f"audio{ext}"
     ready.replace(audio)
-    return info.duration, audio
+    return duration, audio
 
 
 @app.get("/")
@@ -120,6 +141,9 @@ async def upload(request: Request):
                 await f.write(chunk)
         if size == 0:
             raise HTTPException(400, "The file is empty.")
+        expected = int(request.headers.get("content-length") or 0)
+        if expected and size != expected:
+            raise HTTPException(400, "The upload was interrupted before it finished. Please try again.")
         try:
             duration, _ = await run_in_threadpool(_inspect, d, raw, filename)
         except ValueError as e:

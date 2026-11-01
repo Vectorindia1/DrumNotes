@@ -3,9 +3,12 @@
 CLI: python -m backend.pipeline AUDIO [--tempo BPM] [--offset SEC] [--beats-per-bar N]
 """
 import argparse
+import copy
 import json
 import math
 import pathlib
+import sys
+import traceback
 from collections import Counter
 
 import librosa
@@ -46,7 +49,11 @@ def run(audio_path, out_dir="outputs", tempo_hint=None, beats_per_bar=4, offset=
     events, det_meta, pred = adtof.detect(detect_path, return_activations=True)
     tick("Telling ghost notes, open hi-hats and cymbals apart", 0.65 if separate else 0.30)
     y, _ = librosa.load(str(detect_path), sr=articulation.SR, mono=True)
-    events, art_summary = articulation.annotate(events, y, pred, adtof.pick)
+    try:  # optional extras (ghost/open/cymbal labels, refined times): a failure must not cost the score
+        events, art_summary = articulation.annotate(copy.deepcopy(events), y, pred, adtof.pick)
+    except Exception as exc:  # noqa: BLE001
+        traceback.print_exc(file=sys.stderr)
+        art_summary = {"error": f"{type(exc).__name__}: {exc}"[:200]}  # `events` is untouched: plain notation
     del y
     tick("Working out tempo and bar lines", 0.72 if separate else 0.45)
     grid = estimate_grid(audio_path, duration, tempo_hint, beats_per_bar, offset)
@@ -80,7 +87,8 @@ def run(audio_path, out_dir="outputs", tempo_hint=None, beats_per_bar=4, offset=
                        "stem": str(stem_path) if stem_path else None},
         "rhythm": grid.describe(),
         "counts": dict(Counter(e.instrument for e in events)),
-        "articulations": {"status": "EXPERIMENTAL, uncalibrated heuristics; verify by ear", **art_summary},
+        "articulations": {"status": ("FAILED: plain notation used" if "error" in art_summary
+                                      else "EXPERIMENTAL, uncalibrated heuristics; verify by ear"), **art_summary},
         "n_events": len(events),
         "n_bars": len(bars),
         "quantization": {

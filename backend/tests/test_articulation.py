@@ -98,3 +98,22 @@ def test_refine_moves_early_detector_times_onto_the_true_attack():
     assert all(e.time_s < 0.03 for e in unrefined) and len(unrefined) <= 3
     assert all(e.model_output["frame_time_s"] == pytest.approx(t - 0.012) for e, t in zip(ev, true_t, strict=True)
                if "frame_time_s" in e.model_output)  # the detector's own time is preserved
+
+
+def test_hihat_at_the_very_end_of_the_audio_does_not_crash():
+    """Regression (found on a real upload): no measurable tail after the last hit used to raise."""
+    y = (np.random.default_rng(0).standard_normal(int(1.0 * SR)) * 0.1).astype(np.float32)
+    ev = [Event("a", 0.995, 0, "hihat", 0.5, {}), Event("b", 0.5, 0, "hihat", 0.5, {})]
+    out, _ = art.annotate(ev, y)
+    last = max(out, key=lambda e: e.time_s)  # ids are renumbered by annotate
+    assert last.articulation != "open" and last.articulation_features["tail_ratio"] is None  # nothing to measure -> closed
+
+
+def test_annotate_never_crashes_on_hits_at_the_edges_of_short_audio():
+    rng = np.random.default_rng(1)
+    for dur in (0.3, 0.97, 2.0):
+        y = (rng.standard_normal(int(dur * SR)) * 0.1).astype(np.float32)
+        for _ in range(25):
+            ev = [Event(f"e{i}", float(rng.choice([0.0, 0.005, dur - 0.01, dur, dur + 0.3, rng.uniform(0, dur)])), 0,
+                        str(rng.choice(["kick", "snare", "tom", "hihat", "cymbal"])), 0.5, {}) for i in range(int(rng.integers(1, 12)))]
+            art.annotate(ev, y)

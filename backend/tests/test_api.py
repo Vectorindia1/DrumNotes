@@ -143,3 +143,35 @@ def test_jobs_interrupted_by_a_restart_are_marked_failed(tmp_path, monkeypatch, 
     with TestClient(api.app) as c:  # a new server process starts
         j = c.get(f"/api/jobs/{jid}").json()
         assert j["state"] == "failed" and "restarted" in j["error"]
+
+
+def test_truncated_upload_is_rejected_with_a_clear_message(client, tmp_path):
+    """The real failure: a 16 KB prefix of an mp3 whose header still describes the whole song."""
+    import subprocess
+    audio, _ = render(ROCK, 100, 8)
+    wav = tmp_path / "f.wav"
+    sf.write(wav, audio, SR)
+    subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", wav, "-b:a", "128k", tmp_path / "f.mp3"], check=True)
+    full = (tmp_path / "f.mp3").read_bytes()
+    assert up(client, full, "song.mp3").status_code == 200
+    before = len(list(jobs.DATA.iterdir()))
+    r = up(client, full[:16384], "song.mp3")
+    assert r.status_code == 422 and "incomplete or damaged" in r.json()["detail"] and "only 0:00" in r.json()["detail"]
+    assert len(list(jobs.DATA.iterdir())) == before
+
+
+def test_large_chunked_upload_arrives_complete(client):
+    audio, _ = render(ROCK, 100, 40)  # ~100 s, ~8 MB
+    data = wav_bytes(audio)
+    r = client.post("/api/upload", content=(data[i:i + 8192] for i in range(0, len(data), 8192)),  # chunked, no Content-Length
+                    headers={"X-Filename": "big.wav"})
+    assert r.status_code == 200 and (jobs.DATA / r.json()["id"] / "audio.wav").stat().st_size == len(data)
+    assert abs(r.json()["duration_s"] - len(audio) / SR) < 0.1
+
+
+def test_technical_detail_is_hidden_unless_debug_is_on(client, monkeypatch, rock):
+    jid = up(client, rock).json()["id"]
+    jobs.update(jid, state="failed", error="Something went wrong.", detail="ValueError: boom")
+    assert "detail" not in client.get(f"/api/jobs/{jid}").json()
+    monkeypatch.setenv("DRUMSCRIBE_DEBUG", "1")
+    assert client.get(f"/api/jobs/{jid}").json()["detail"] == "ValueError: boom"
