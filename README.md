@@ -65,17 +65,19 @@ All hits, +-50 ms, website default (drums separated first, low-confidence hits l
 
 | | wrong notes printed | missed | precision | recall | F1 |
 |---|---|---|---|---|---|
-| default (separated) | 724 | 1718 | 0.90 | 0.78 | 0.84 |
-| without separation | 1095 | 1888 | 0.85 | 0.76 | 0.80 |
+| default (separated) | 717 | 1732 | 0.90 | 0.78 | 0.84 |
+| without separation | 1019 | 1951 | 0.86 | 0.76 | 0.80 |
 | before 2026-11-02 (no separation, no cut-offs) | 1235 | 1879 | 0.83 | 0.76 | 0.80 |
 
-Per instrument (default): kick 0.92, snare 0.76 (ghost notes are mostly missed), hi-hat 0.87, cymbal 0.84, toms 0.51.
+Per instrument (default): kick 0.92, snare 0.76 (quiet ghost notes are mostly missed), hi-hat 0.87, cymbal 0.84, toms 0.51.
 The confidence cut-offs (`MIN_CONFIDENCE` in backend/pipeline.py) were chosen leave-one-song-out on these same songs;
-nothing has been checked on a second dataset. Ghost-note marks are right only about 4 times in 10 (1 in 4 without separation).
+nothing has been checked on a second dataset. Ghost notes are NOT marked in the score: the marks were right at most
+44 % of the time at any threshold, and the extra quiet snares added for them were mostly not real (76 of 139 without
+separation). Their loudness score stays in the JSON (`ghost_probability`).
 Labels: ride vs crash correct about 90 % of the time and open vs closed hi-hat about 94 %, measured on songs the
 label model had not seen (`scripts/train_labels.py`, leave-one-song-out). Tambourine / jingles played like a hi-hat:
 about a third found, about half of the marks right (few real examples; `scripts/fetch_samples.py` then
-`scripts/train_cymbal_types.py`). Splash, china and flams are not detected yet. Re-run: `.venv/bin/python scripts/fetch_mdb.py && PYTHONPATH=. .venv/bin/python scripts/eval_mdb.py`.
+`scripts/train_cymbal_types.py`). Splash and china are rarely marked; flam marks have not been checked on real recordings. Re-run: `.venv/bin/python scripts/fetch_mdb.py && PYTHONPATH=. .venv/bin/python scripts/eval_mdb.py`.
 The label model is trained on non-commercial data (CC BY-NC-SA), like the drum detector itself.
 
 ## If something goes wrong

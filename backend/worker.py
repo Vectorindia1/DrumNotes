@@ -38,12 +38,13 @@ def summarise(report, params, title, duration):
     if "LOW CONFIDENCE" in rhythm["downbeat"]:
         notes.append("Where each bar starts is a best guess, so the bar lines may be shifted. The notes themselves are unaffected.")
     if "error" in arts:
-        notes.append("Ghost notes, open hi-hats and cymbal types could not be analysed for this file, so the score shows plain notes.")
+        notes.append("Open hi-hats and cymbal types could not be analysed for this file, so the score shows plain notes.")
     else:
         notes.append("Ride vs crash and open vs closed hi-hat come from a model trained on real recordings (right about 90 % and 94 % "
                      "of the time on songs it had not seen). Tambourine/jingles played like a hi-hat are now picked out, but only "
                      "about a third of them, and about half of the tambourine marks are right (tested on few real examples). "
-                     "Ghost notes are rough estimates; splash, china and flams are not detected yet. Check the score by ear.")
+                     "Ghost notes are not marked (our tests got them wrong more often than right), so play quiet snares by ear; splash and "
+                     "china are not detected yet.")
     return {
         "title": title, "duration_s": round(duration, 1), "tempo_bpm": round(rhythm["tempo_bpm"], 1),
         "tempo_detected": not params.get("tempo"), "tempo_alternatives": rhythm.get("alternatives_unresolved", [])[:6], "bars": report["n_bars"], "hits": report["counts"],

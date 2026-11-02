@@ -3,7 +3,8 @@
 ADTOF only outputs kick/snare/tom/hi-hat/cymbal. This adds, from band-limited energy envelopes at
 1.5 ms resolution and a few spectral features:
   flam       snare hit with a second onset 15-65 ms before it (grace note)
-  ghost      snare hit far below the local main-hit level (+ extra low-threshold candidates)
+  ghost      snare hit far below the local main-hit level: stored as ghost_probability only, NOT marked in the score
+             (on MDB Drums at most 44 % of such marks were real ghost notes, at any threshold)
   open       hi-hat whose high-frequency energy keeps ringing after the hit
   ride/crash/splash/china   cymbal type: ride from a regular run of hits, others from decay+spectrum
 Every threshold below is a guess made without labelled data. Raw measurements are stored in
@@ -23,8 +24,6 @@ FLAM_MIN_S, FLAM_MAX_S = 0.015, 0.065
 FLAM_PICK_ACTIVATION = 0.08  # ADTOF snare activation needed for a grace hit (separate local max)
 FLAM_REL_LEVEL = (0.15, 1.0)  # grace onset strength relative to the main hit
 GHOST_RATIO = (0.35, 0.55)  # loudness ratio to main-hit level: <=0.35 -> p=1, >=0.55 -> p=0
-GHOST_CANDIDATE_ACTIVATION = 0.12  # low-threshold snare pick for quiet hits ADTOF's 0.24 misses
-GHOST_CANDIDATE_MIN_RATIO = 0.15  # below this a candidate is treated as noise
 OPEN_TAIL_RATIO = 0.10  # sustained HF power 80-170 ms after the hit, relative to its peak (closed ~0, open ~0.1+)
 OPEN_MIN_WINDOW_S = 0.17  # need this long before the next hi-hat/cymbal to judge
 RIDE_RUN_MIN, RIDE_MAX_IOI_S, RIDE_MAX_CV = 4, 0.7, 0.25
@@ -125,40 +124,7 @@ def classify_ghosts(snares, env):
         ratio = s / ref if ref > 0 else 1.0
         e.ghost_probability = round(float(np.clip((GHOST_RATIO[1] - ratio) / (GHOST_RATIO[1] - GHOST_RATIO[0]), 0, 1)), 2)
         e.articulation_features = {**(e.articulation_features or {}), "snare_level_ratio": round(float(ratio), 2)}
-        if e.ghost_probability >= 0.5 and e.articulation != "flam":
-            e.articulation, e.articulation_confidence = "ghost", e.ghost_probability
     return strengths, times
-
-
-def add_ghost_candidates(events, env, pred, pick, grace_times=()):
-    """Quiet snare hits below ADTOF's default threshold: kept only if they are clearly quieter than
-    the main hits (ghost-like) yet above the noise floor."""
-    snares = _sorted(events, "snare")
-    mains = [e for e in snares if e.articulation != "grace"]
-    strengths = np.array([env.strength("snare", e.time_s) for e in mains])
-    times = np.array([e.time_s for e in mains])
-    thr = [2.0, GHOST_CANDIDATE_ACTIVATION, 2.0, 2.0, 2.0]
-    added = []
-    existing = [e.time_s for e in events if e.instrument == "snare"] + list(grace_times)
-    for t in pick(pred, thr)[38]:
-        if any(abs(t - x) < 0.04 for x in existing):
-            continue
-        near = strengths[np.abs(times - t) <= 10.0]
-        if not len(near):
-            continue
-        ratio = env.strength("snare", t) / max(np.percentile(near, 75), 1e-9)
-        if not GHOST_CANDIDATE_MIN_RATIO <= ratio < sum(GHOST_RATIO) / 2:
-            continue
-        act = float(pred[min(round(t * 100), len(pred) - 1), 1])
-        p = round(float(np.clip((GHOST_RATIO[1] - ratio) / (GHOST_RATIO[1] - GHOST_RATIO[0]), 0, 1)), 2)
-        added.append(Event(
-            id="", time_s=t, sample=round(t * SR), instrument="snare", confidence=round(act, 4),
-            model_output={"model": "adtof-pytorch", "label": 38, "activation": round(act, 4), "low_threshold": GHOST_CANDIDATE_ACTIVATION},
-            articulation="ghost", articulation_confidence=p, ghost_probability=p,
-            articulation_features={"snare_level_ratio": round(float(ratio), 2), "source": "low-threshold candidate"},
-            provenance="detected-low-threshold",
-        ))
-    return added
 
 
 def classify_hats(events, env):
@@ -236,33 +202,32 @@ def classify_cymbals(events, env, y):
 
 
 def annotate(events, y, pred=None, pick=None, env=None):
-    """Mutates events (labels + features); returns (events incl. added graces/ghost candidates,
-    summary). pred/pick enable the low-threshold evidence for flams and extra ghost notes."""
+    """Mutates events (labels + features); returns (events incl. added flam graces, summary).
+    pred/pick enable the low-threshold evidence for flams. Quiet low-threshold snares are NOT added as ghost
+    notes any more: on MDB Drums 76 of 139 such additions were not real notes (full mix)."""
     env = env or Env(band_power(y))
     snares = _sorted(events, "snare")
     low = pick(pred, [2.0, FLAM_PICK_ACTIVATION, 2.0, 2.0, 2.0])[38] if pred is not None and pick else []
     pairs = find_flams(snares, env, low, pred)
     graces = [g for g, _ in pairs]
     classify_ghosts([e for e in snares if e.articulation != "grace"], env)
-    added = add_ghost_candidates(events, env, pred, pick, [g.time_s for g in graces]) if pred is not None and pick else []
     classify_hats(events, env)
     classify_cymbals(events, env, y)
-    refine_onsets(events + added + [g for g, _ in pairs if g not in events], env)
+    refine_onsets(events + [g for g, _ in pairs if g not in events], env)
     new_graces = [g for g in graces if g not in events]
-    events = sorted(events + added + new_graces, key=lambda e: (e.time_s, e.instrument))
+    events = sorted(events + new_graces, key=lambda e: (e.time_s, e.instrument))
     for i, e in enumerate(events):
         e.id = f"e{i:05d}"
     for g, main in pairs:
         g.grace_of = main.id
-    return events, summary(events, len(added))
+    return events, summary(events)
 
 
-def summary(events, n_candidates=0):
+def summary(events):
     s = {}
     for e in (e for e in events if e.notated):  # what the score shows
         key = f"{e.instrument}:{e.articulation or 'plain'}"
         s[key] = s.get(key, 0) + 1
-    s["ghost_candidates_added_from_low_threshold"] = n_candidates
     return dict(sorted(s.items()))
 
 

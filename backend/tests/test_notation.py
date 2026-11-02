@@ -30,6 +30,16 @@ def test_simultaneous_events_become_chords_and_no_tuplets(tmp_path):
     assert "time-modification" not in xml and "<tuplet" not in xml
 
 
+def test_notes_spelled_like_drum_parts_dotted_eighth_and_offset_eighth(tmp_path):
+    bar = [set() for _ in range(16)]
+    for s in (0, 3, 5, 7):  # beat 1: dotted 8th + 16th; beat 2: 16th rest, 8th, 16th
+        bar[s] = {"snare"}
+    xml = _write(tmp_path, [bar]).read_text()
+    assert xml.count("<dot/>") == 1
+    assert xml.count("<rest/>") == 2  # the 16th rest opening beat 2 + the half rest for beats 3-4
+    assert validate_musicxml(tmp_path / "s.musicxml", expected_bars=1) == []
+
+
 def test_validator_catches_short_bar(tmp_path):
     p = _write(tmp_path, [[set() for _ in range(16)]])
     p.write_text(re.sub(r"<duration>16</duration>", "<duration>12</duration>", p.read_text()))

@@ -161,3 +161,17 @@ played; aim is precision (no notes that are not there). All numbers: MDB Drums, 
 - Researched: drum2midi (ADTOF + DrumSep for articulation; tom-stem confirmation overfit MDB, +0.006 on ENST),
   adtof_plus_drum_transcription, akaihola/drum-transcribe (DrumSep: too many hits, ~10x real time on CPU), STAR Drums
   (181 GB, synthesized drums), LarsNet (CC BY-NC). Nothing adopted beyond the separation finding.
+
+## Clarity round (2026-11-03)
+User: "improve all aspects to achieve utmost clarity". MDB Drums numbers, 23 songs, +-50 ms.
+- **Ghost notes no longer marked or added.** Ghost marks: at most 44 % right (stem) / 33 % (mix) at ANY
+  ghost_probability threshold (swept 0.5-1.0), so a bracket misleads more often than it helps. The low-threshold
+  "ghost candidate" snares were 63/139 right on the mix (14/21 on the stem): removed. ghost_probability stays in the JSON.
+  Website default: wrong 724 -> 717, missed 1718 -> 1732. Without separation: wrong 1095 -> 1019, missed 1888 -> 1951.
+- **Drum-style durations in the score**: a note lasts to the next onset within its beat, so dotted 8th + 16th and
+  16th-8th-16th replace "8th, 16th rest, 16th" (4/4, 3/4, 2/4; 6/8 and 12/8 unchanged). Checked on the WhatsApp
+  song's PDF: far fewer rests and flags; validate_pdf OK.
+- Checked and NOT changed: open hi-hat marks with little room before the next hat (song bars 29-32 alternate open/closed
+  16ths). On MDB short-room open marks were 7/7 (mix) and 3/3 (stem) right, all open marks ~90 %: no evidence for a rule.
+  The song's 162 open hats still need checking by ear.
+- Text fixes: website note and README no longer say flams are undetected (they are marked; unverified on real audio).

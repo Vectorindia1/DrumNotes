@@ -1,8 +1,9 @@
 """Drum-set MusicXML writer: percussion clef, voice 1 = hands (stems up), voice 2 = kick (stems down).
 
-Input is bars of 16th-note slots (4/4 style, divisions=4 per quarter). Only simple durations are
-emitted (no tuplets/ties); note lengths are the largest aligned value up to the next onset and
-the remainder is filled with aligned rests.
+Input is bars of 16th-note slots (4/4 style, divisions=4 per quarter). No tuplets/ties. A note lasts up to the
+next onset but never past its beat, the way drum parts are written: dotted 8th + 16th, 16th-8th-16th, rather
+than 8th + 16th rest + 16th (fewer rests to read). 6/8 and 12/8 keep plain aligned values. The remainder is
+filled with aligned rests.
 """
 from xml.sax.saxutils import escape
 
@@ -25,10 +26,10 @@ KIT = {
     "shaker": ("E", 5, 70, False, "shaker", "x"),
 }
 ORDER = list(KIT)  # low -> high within a chord
-TYPE = {1: "16th", 2: "eighth", 4: "quarter", 8: "half", 16: "whole"}
+TYPE = {1: "16th", 2: "eighth", 3: "eighth", 4: "quarter", 8: "half", 16: "whole"}  # 3 = dotted eighth
 FEET = {"kick"}
 LEGEND = ("Key: x hi-hat | circled x open hi-hat | x top line ride | x ledger crash | "
-          "down-triangle splash | up-triangle china | x 4th space tamb./shaker | (n) ghost | grace note flam")
+          "down-triangle splash | up-triangle china | x 4th space tamb./shaker | grace note flam")
 
 
 def _fits(start, size, group):
@@ -45,6 +46,13 @@ def _rests(start, n, group=16):
     return out
 
 
+def _note_size(i, gap, group, scale):
+    """Longest value up to the next onset (gap slots) that stays inside the note's beat."""
+    if scale == 1 and group % 4 == 0:  # quarter-note beats: 4, dotted 8th, 8th (also off the 16th), 16th
+        return next(s for s in (4, 3, 2, 1) if s <= gap and i % 4 + s <= 4)
+    return next(s for s in (4, 2, 1) if s <= gap and _fits(i, s, group) and s * scale <= 4)
+
+
 def _rest_xml(voice, size, scale=1):
     return f"<note><rest/><duration>{size * scale}</duration><voice>{voice}</voice><type>{TYPE[size * scale]}</type></note>"
 
@@ -57,7 +65,7 @@ def _note_xml(key, voice, size, chord, stem, grace=False, scale=1):
         + f"<unpitched><display-step>{step}</display-step><display-octave>{octave}</display-octave></unpitched>"
         + ("" if grace else f"<duration>{size}</duration>")
         + f'<instrument id="P1-I{midi}"/><voice>{voice}</voice>'
-        + f"<type>{'eighth' if grace else TYPE[size]}</type><stem>{stem}</stem>"
+        + f"<type>{'eighth' if grace else TYPE[size]}</type>" + ("<dot/>" if size == 3 and not grace else "") + f"<stem>{stem}</stem>"
         + (f'<notehead{" parentheses=\"yes\"" if paren else ""}>{head}</notehead>' if head else "")
         + "</note>"
     )
@@ -80,7 +88,7 @@ def _voice_xml(slots, voice, stem, group=16, scale=1):
     xml = "".join(_rest_xml(voice, size, scale) for _, size in _rests(0, onsets[0], group))
     for k, i in enumerate(onsets):
         nxt = onsets[k + 1] if k + 1 < len(onsets) else n
-        size = next(s for s in (4, 2, 1) if s <= nxt - i and _fits(i, s, group) and s * scale <= 4)
+        size = _note_size(i, nxt - i, group, scale)
         keys = sorted(slots[i], key=ORDER.index)
         xml += _label_xml(sorted({KIT[k][4] for k in keys if KIT[k][4]}))
         for j, key in enumerate(keys):

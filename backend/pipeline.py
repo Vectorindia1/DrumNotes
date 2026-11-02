@@ -100,7 +100,7 @@ def run(audio_path, out_dir="outputs", tempo_hint=None, beats_per_bar=4, offset=
         detect_path = stem_path
     tick("Finding the drum hits", 0.55 if separate else 0.10)
     events, det_meta, pred = adtof.detect(detect_path, return_activations=True)
-    tick("Telling ghost notes, open hi-hats and cymbals apart", 0.65 if separate else 0.30)
+    tick("Telling open hi-hats and cymbals apart", 0.65 if separate else 0.30)
     y, _ = librosa.load(str(detect_path), sr=articulation.SR, mono=True)
     env = articulation.Env(articulation.band_power(y))
     try:  # optional extras (ghost/open/cymbal labels, refined times): a failure must not cost the score
@@ -120,7 +120,7 @@ def run(audio_path, out_dir="outputs", tempo_hint=None, beats_per_bar=4, offset=
         traceback.print_exc(file=sys.stderr)
         learned = {"error": f"{type(exc).__name__}: {exc}"[:200]}
     if learned and "error" not in learned and "error" not in art_summary:  # counts must describe the labels printed
-        art_summary = articulation.summary(events, art_summary.get("ghost_candidates_added_from_low_threshold", 0))
+        art_summary = articulation.summary(events)
     del y
     floor = MIN_CONFIDENCE["stem" if separate else "mix"]
     for e in events:
@@ -138,7 +138,7 @@ def run(audio_path, out_dir="outputs", tempo_hint=None, beats_per_bar=4, offset=
         e.id = f"e{i:05d}"
     bars, collisions = build_bars(events, n_bars, grid.slots_per_bar)
     if "error" not in art_summary:  # after every evidence check and merge: counts match the printed score
-        art_summary = articulation.summary(events, art_summary.get("ghost_candidates_added_from_low_threshold", 0))
+        art_summary = articulation.summary(events)
 
     paths = {
         "musicxml": out / "musicxml" / f"{stem}.musicxml",

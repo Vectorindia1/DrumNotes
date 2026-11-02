@@ -25,10 +25,13 @@ def test_synthetic_articulations_recovered():
         return min((e for e in out if e.instrument == inst), key=lambda e: abs(e.time_s - t))
     for t, inst, want in truth:
         assert abs(at(t, inst).time_s - t) < 0.02
-        if want:
+        if want == "ghost":  # measured but not marked: ghost marks were mostly wrong on real songs
+            assert at(t, inst).ghost_probability >= 0.5 and at(t, inst).articulation is None
+        elif want:
             assert at(t, inst).articulation == want, (t, inst, want)
     plain_snares = [e for e in out if e.instrument == "snare" and e.articulation is None]
-    assert len(plain_snares) == 8  # the 8 steady main hits stay plain (no false ghost/flam)
+    assert len(plain_snares) == 9  # 8 steady main hits + the quiet one (no false flam)
+    assert all(e.ghost_probability < 0.5 for e in plain_snares if abs(e.time_s - 1.25) > 0.05)
     assert sum(e.articulation == "open" for e in out) == 2
     assert not any(e.articulation == "open" for e in out if abs(e.time_s - 7.0) < 0.05 or abs(e.time_s - 8.0) < 0.05)
 
