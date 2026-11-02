@@ -132,3 +132,32 @@ relabelling (so "all 92 cymbals crash" on the 115 song was wrong: the model says
 training features were contaminated by the installed model; cymbal relabelling changed hi-hat features.
 On the user's songs (UNVERIFIED by ear): 115-BPM song 100 of 802 hats -> tambourine, mostly in-between 16ths;
 Fitoor 31 tambourine, mostly on the 4th eighth with the snare. 93 tests pass; browser e2e with Fitoor passes.
+
+## Precision round (2026-11-02, later)
+User: the WhatsApp song ("Mujhko Pehchaan Lo", 3.3 MB, the "115-BPM song") still shows 16th hats where 8ths are
+played; aim is precision (no notes that are not there). All numbers: MDB Drums, 23 real songs, +-50 ms.
+- **Tried and rejected: "darker in-between 16ths are a shaker" rule.** On the song, the in-between 16ths are 3-5 dB
+  darker (6-16 kHz vs 2-5 kHz) than the hat eighths. But Disco's REAL soft 16th hats are 3-4 dB darker too: the rule
+  cost hi-hat F1 0.856 -> 0.816 (169 real hats removed from Disco alone). No threshold separated the two. Reverted.
+- **Tried and rejected: shaker/maracas/cabasa samples (GM soundfonts) in the hat/tambourine model.** LOSO on real hits
+  unchanged (tambourine 6/21 vs 7/21, same 6 hats mis-moved); the song's tambourine count fell 100 -> 66. No measured
+  gain, so the previous model stays.
+- **Drum separation benchmarked on real songs for the first time** (Demucs htdemucs, stems in data/stems/mdb): wrong
+  notes 1235 -> 969, missed 1879 -> 1683, kick F1 0.849 -> 0.918, snare 0.711 -> 0.757; hi-hat got MORE false hits.
+  Now ON BY DEFAULT on the website (CLI still needs --separate). Matches drum2midi's whole-song figure (micro F1 0.834).
+- **Labels on separated audio**: the learned labels were computed on the stem but trained on mixes (open-hat
+  precision 0.92 -> 0.76, crash recall 0.84 -> 0.47, tambourine precision 0.14). Now the label features always come
+  from the mix: open 0.88, crash recall 0.75, tambourine 0.73 (in-sample: the label model was trained on MDB).
+- **Confidence cut-offs** (`MIN_CONFIDENCE`), chosen leave-one-song-out, only those picked on every held-out song:
+  mix: tom 0.65 (wrong toms 183 -> 40). Stem: tom 0.65, hi-hat 0.4, snare 0.3 (wrong hats 349 -> 223, snares 229 ->
+  176, toms 75 -> 12; F1 equal or better). Kick/cymbal cut-offs gave nothing out-of-sample.
+- **Result (website default):** wrong notes 1235 -> 724, missed 1879 -> 1718, precision 0.83 -> 0.90, F1 0.80 -> 0.84.
+- Fixes: report/website counts now count only printed notes (hidden toms etc. were counted); "eighths" mode reported
+  recovered_from_audio = -52.
+- On the WhatsApp song (UNVERIFIED by ear): hats 702 -> 505, almost every bar 8 eighths + 1-4 in-between 16ths; the dark
+  16th run in bars 47-69 is gone; toms 100 -> 5; tambourine 100 -> 35; still 162 open hats (looks high). "Simplify to
+  eighths" gives pure 8ths on this song.
+- Ghost-note marks: precision 0.25 (mix) / 0.41 (stem): mostly wrong. Left on pending the user's decision.
+- Researched: drum2midi (ADTOF + DrumSep for articulation; tom-stem confirmation overfit MDB, +0.006 on ENST),
+  adtof_plus_drum_transcription, akaihola/drum-transcribe (DrumSep: too many hits, ~10x real time on CPU), STAR Drums
+  (181 GB, synthesized drums), LarsNet (CC BY-NC). Nothing adopted beyond the separation finding.

@@ -259,7 +259,7 @@ def annotate(events, y, pred=None, pick=None, env=None):
 
 def summary(events, n_candidates=0):
     s = {}
-    for e in events:
+    for e in (e for e in events if e.notated):  # what the score shows
         key = f"{e.instrument}:{e.articulation or 'plain'}"
         s[key] = s.get(key, 0) + 1
     s["ghost_candidates_added_from_low_threshold"] = n_candidates

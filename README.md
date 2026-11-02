@@ -10,8 +10,9 @@ while it plays. Research prototype: transcriptions are drafts to check by ear.
 ./serve.sh      # http://127.0.0.1:8000   (HOST=0.0.0.0 ./serve.sh to share on your network)
 ```
 
-Open the address, drop an audio file, tick the rights box, press **Create score**. A 6-minute song takes about a minute
-(about 13 minutes with "Separate the drums first" on this machine). Your scores are listed on the home page
+Open the address, drop an audio file, tick the rights box, press **Create score**. "Separate the drums first" is on
+by default because it prints far fewer wrong notes (see Accuracy); a 3.5-minute song then takes about 6 minutes on this
+machine (untick it for about a minute). Your scores are listed on the home page
 (saved in your browser) and every score has its own bookmarkable address.
 
 From the command line: `python -m backend.pipeline song.mp3 --tempo 110 --separate --player`.
@@ -60,7 +61,17 @@ annotations sit on triplets (Rockabilly, CoolJazz) become 12/8; SwingJazz, also 
 
 ## Accuracy (measured on 23 real, hand-annotated songs: MDB Drums)
 
-F1 at +-50 ms: kick 0.85, snare 0.71 (ghost notes are mostly missed), hi-hat 0.85, cymbal 0.84, toms 0.34.
+All hits, +-50 ms, website default (drums separated first, low-confidence hits left out):
+
+| | wrong notes printed | missed | precision | recall | F1 |
+|---|---|---|---|---|---|
+| default (separated) | 724 | 1718 | 0.90 | 0.78 | 0.84 |
+| without separation | 1095 | 1888 | 0.85 | 0.76 | 0.80 |
+| before 2026-11-02 (no separation, no cut-offs) | 1235 | 1879 | 0.83 | 0.76 | 0.80 |
+
+Per instrument (default): kick 0.92, snare 0.76 (ghost notes are mostly missed), hi-hat 0.87, cymbal 0.84, toms 0.51.
+The confidence cut-offs (`MIN_CONFIDENCE` in backend/pipeline.py) were chosen leave-one-song-out on these same songs;
+nothing has been checked on a second dataset. Ghost-note marks are right only about 4 times in 10 (1 in 4 without separation).
 Labels: ride vs crash correct about 90 % of the time and open vs closed hi-hat about 94 %, measured on songs the
 label model had not seen (`scripts/train_labels.py`, leave-one-song-out). Tambourine / jingles played like a hi-hat:
 about a third found, about half of the marks right (few real examples; `scripts/fetch_samples.py` then

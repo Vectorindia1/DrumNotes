@@ -42,7 +42,8 @@ try {
   check("URL now holds the job id (bookmarkable)", await ev(`/^#\\/[0-9a-f]{32}$/.test(location.hash)`));
   check("create button is disabled until rights are confirmed", await ev(`document.querySelector('#create').disabled`));
   await shot("2-setup");
-  if (flags.includes("--separate")) await ev(`document.querySelector('#separate').click()`);
+  check("drum separation is on by default", await ev(`document.querySelector('#separate').checked`));
+  if (!flags.includes("--separate")) await ev(`document.querySelector('#separate').click()`);
   await ev(`document.querySelector('#tempo').value='${TEMPO}'; document.querySelector('#rights').click()`);
   check("ticking the rights box enables Create", await ev(`!document.querySelector('#create').disabled`));
   await ev(`document.querySelector('#create').click()`);

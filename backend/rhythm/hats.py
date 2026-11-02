@@ -153,8 +153,9 @@ def regularize_hats(events, grid, env, n_bars, mode="auto", allow_additions=True
         recovered.append(e)
     present_bars = [b for b in range(n_bars) if any(b * spb + s in keep for s in range(spb))]
     return recovered, {
-        "mode": mode, "hats_kept": len(keep & set(hats)), "recovered_from_audio": len(recovered) - len(filled),
-        "filled_from_pattern": len(filled),
+        "mode": mode, "hats_kept": len(keep & set(hats)),
+        "recovered_from_audio": sum(e.provenance == "recovered-from-audio" for e in recovered),
+        "filled_from_pattern": sum(e.provenance == "filled-from-pattern" for e in recovered),
         "dropped_quiet_ticks": dropped_weak, "dropped_no_energy": dropped_noise,
         "bars_with_hats": len(present_bars),
         "bars_eighths_only": sum(1 for b in present_bars if not allow16[b]), "bars_sixteenths": sum(1 for b in present_bars if allow16[b]),

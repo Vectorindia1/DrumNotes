@@ -28,6 +28,12 @@ from backend.separation.demucs_sep import separate_drums
 from backend.validation.musicxml import validate_musicxml
 from backend.validation.pdf import validate_pdf
 
+# Hits below these detector confidences are mostly wrong, so they stay out of the score (kept in the JSON).
+# Picked leave-one-song-out on MDB Drums (23 real songs); only cut-offs that held on every held-out song are used.
+# Full mix: tom precision 0.23 -> 0.51 (wrong toms 183 -> 40). Drum stem: wrong hats 349 -> 223, snares 229 -> 176,
+# toms 75 -> 12, F1 equal or better. Not checked on a second dataset. See PROGRESS.md.
+MIN_CONFIDENCE = {"mix": {"tom": 0.65}, "stem": {"tom": 0.65, "hihat": 0.4, "snare": 0.3}}
+
 
 def grid_lock(events, grid):
     """0..1: how tightly the kick/snare/hi-hat hits sit on the 16th grid (1 = exactly)."""
@@ -106,6 +112,9 @@ def run(audio_path, out_dir="outputs", tempo_hint=None, beats_per_bar=4, offset=
     grid = estimate_grid(audio_path, duration, tempo_hint, beats_per_bar, offset, events=events, meter=meter)
     beats_per_bar = grid.beats_per_bar
     try:  # learned ride/crash + open/closed hi-hat labels (replace the heuristics when the model is present)
+        if separate:  # the model learned full-mix sound: on stem features open-hat precision 0.92 -> 0.76 (MDB)
+            y = librosa.load(str(audio_path), sr=articulation.SR, mono=True)[0]
+            pred = adtof.activations(audio_path)
         learned = labels.apply(events, y, pred, 60.0 / grid.tempo_bpm)
     except Exception as exc:  # noqa: BLE001 - optional, never fatal
         traceback.print_exc(file=sys.stderr)
@@ -113,6 +122,11 @@ def run(audio_path, out_dir="outputs", tempo_hint=None, beats_per_bar=4, offset=
     if learned and "error" not in learned and "error" not in art_summary:  # counts must describe the labels printed
         art_summary = articulation.summary(events, art_summary.get("ghost_candidates_added_from_low_threshold", 0))
     del y
+    floor = MIN_CONFIDENCE["stem" if separate else "mix"]
+    for e in events:
+        if e.grace_of is None and e.confidence < floor.get(e.instrument, 0.0):
+            e.notated = False
+            e.articulation_features = {**(e.articulation_features or {}), "dropped": f"confidence below {floor[e.instrument]}"}
     calibrate_phase(events, grid)
     fit_bar_phase(events, grid, beat1)
     quantize(events, grid)
@@ -123,6 +137,8 @@ def run(audio_path, out_dir="outputs", tempo_hint=None, beats_per_bar=4, offset=
     for i, e in enumerate(events):
         e.id = f"e{i:05d}"
     bars, collisions = build_bars(events, n_bars, grid.slots_per_bar)
+    if "error" not in art_summary:  # after every evidence check and merge: counts match the printed score
+        art_summary = articulation.summary(events, art_summary.get("ghost_candidates_added_from_low_threshold", 0))
 
     paths = {
         "musicxml": out / "musicxml" / f"{stem}.musicxml",
@@ -150,7 +166,7 @@ def run(audio_path, out_dir="outputs", tempo_hint=None, beats_per_bar=4, offset=
         "separation": {"used": separate, "model": "htdemucs (weights terms unverified)" if separate else None,
                        "stem": str(stem_path) if stem_path else None},
         "rhythm": grid.describe(),
-        "counts": dict(Counter(e.instrument for e in events)),
+        "counts": dict(Counter(e.instrument for e in events if e.notated)),
         "articulations": {"status": ("FAILED: plain notation used" if "error" in art_summary
                                       else "EXPERIMENTAL, uncalibrated heuristics; verify by ear"), **art_summary},
         "n_events": len(events),
