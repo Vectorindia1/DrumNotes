@@ -59,8 +59,7 @@ sudo apt install -y git ffmpeg musescore3 musescore-general-soundfont-small libf
 curl -LsSf https://astral.sh/uv/install.sh | sh     # installs uv; open a new terminal afterwards
 ```
 
-**Step 2. Get the code.** The GitHub repository is private, so you must be signed in to GitHub (`gh auth login`)
-or have access to it:
+**Step 2. Get the code:**
 
 ```bash
 git clone https://github.com/Vectorindia1/DrumNotes.git
