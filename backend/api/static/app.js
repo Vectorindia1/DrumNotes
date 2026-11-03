@@ -96,7 +96,7 @@
     $("#separate").checked = !tooLong && (p.separate ?? true);  // on by default: fewer wrong notes (measured)
     $("#sep-note").textContent = tooLong
       ? `Available for recordings up to ${j.limits.max_separate_minutes} minutes.`
-      : `Recommended: about 17 % fewer wrong notes and 10 % fewer missed ones on real songs. Slower (${fmtMin(j.estimate.separated)} for this file).`;
+      : `Recommended: about 30 % fewer wrong notes and 11 % fewer missed ones on real songs. Slower (${fmtMin(j.estimate.separated)} for this file).`;
     updateEta(j);
     show("setup");
   }

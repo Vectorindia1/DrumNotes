@@ -1,5 +1,7 @@
 # DrumScribe
 
+**Complete step-by-step guide: [docs/GUIDE.md](docs/GUIDE.md)** (install, use, how it works, accuracy, hosting, licences).
+
 Upload a recording, get drum sheet music (PDF, MusicXML, MIDI, JSON) and a player where a blue line follows the score
 while it plays. Research prototype: transcriptions are drafts to check by ear.
 
@@ -44,8 +46,8 @@ From the command line: `python -m backend.pipeline song.mp3 --tempo 110 --separa
 This is a prototype. There is **no login and no rate limiting**: put it behind a reverse proxy (HTTPS, per-IP limits,
 upload size/time limits) and keep the limits above low. The drum-detection model (ADTOF) is licensed
 **CC BY-NC-SA 4.0, non-commercial only**: a public service that earns money needs permission from its authors or a
-different model (see `LICENSE_AUDIT.md`). Demucs weights' licence is unverified. No Dockerfile is provided
-(Docker was not available to test it).
+different model (see `LICENSE_AUDIT.md`). Demucs weights' licence is unverified. A `Dockerfile` is included but has NOT been built or tested yet
+(see docs/GUIDE.md, section 9).
 
 ## Tempo
 

@@ -175,3 +175,12 @@ User: "improve all aspects to achieve utmost clarity". MDB Drums numbers, 23 son
   16ths). On MDB short-room open marks were 7/7 (mix) and 3/3 (stem) right, all open marks ~90 %: no evidence for a rule.
   The song's 162 open hats still need checking by ear.
 - Text fixes: website note and README no longer say flams are undetected (they are marked; unverified on real audio).
+
+## Guide + hosting files (2026-11-04)
+- docs/GUIDE.md: complete step-by-step guide (install, website, CLI, score key, pipeline stages, accuracy, tests,
+  hosting, licences, troubleshooting, project layout). README links to it.
+- Dockerfile + .dockerignore for Hugging Face Spaces / any Docker host: NOT BUILT OR TESTED (Docker daemon not
+  running here, only 4 GB disk free). Verified only that its Debian trixie packages and pinned CPU torch wheels exist.
+- The user's suggested free-for-dev list (jixserver/free-for-dev) is a 2016-era copy of the list; nothing on it can
+  run this app. Recommended a PRIVATE Hugging Face Space: ADTOF-pytorch still has no licence file (checked 2026-11-04).
+- Website separation note corrected: 30 % fewer wrong notes, 11 % fewer missed (was "17 % / 10 %", outdated).
